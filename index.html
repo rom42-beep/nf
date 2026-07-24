@@ -987,52 +987,143 @@ async function importerPdf(fichier) {
         return;
     }
 
+    const badge = document.getElementById("badgePdf");
+    const photoZone = document.getElementById("photoZone");
+
     try {
+        badge.style.display = "inline-block";
+        badge.textContent = "PDF · préparation…";
+        photoZone.style.display = "block";
+
         const donnees = await fichier.arrayBuffer();
-        const documentPdf = await pdfjsLib.getDocument({ data: donnees }).promise;
+
+        const documentPdf = await pdfjsLib.getDocument({
+            data: donnees,
+            disableFontFace: true,
+            useWorkerFetch: false
+        }).promise;
+
         const pages = [];
 
         for (let numero = 1; numero <= documentPdf.numPages; numero++) {
+
+            badge.textContent =
+                "PDF · conversion " +
+                numero +
+                "/" +
+                documentPdf.numPages;
+
             const page = await documentPdf.getPage(numero);
+
+            /*
+            Sur iPhone, les PDF multipages peuvent consommer beaucoup
+            de mémoire si chaque page est rendue trop grande.
+            On limite donc volontairement chaque page à ~1400 px
+            sur son plus grand côté : largement suffisant pour un
+            justificatif et beaucoup plus stable.
+            */
             const viewportOriginal = page.getViewport({ scale: 1 });
 
-            const dimensionMax = 2200;
+            const dimensionMax = 1400;
+
             const echelle = Math.min(
-                2,
-                dimensionMax / Math.max(viewportOriginal.width, viewportOriginal.height)
+                1.8,
+                dimensionMax /
+                Math.max(
+                    viewportOriginal.width,
+                    viewportOriginal.height
+                )
             );
 
-            const viewport = page.getViewport({ scale: echelle });
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.ceil(viewport.width);
-            canvas.height = Math.ceil(viewport.height);
+            const viewport = page.getViewport({
+                scale: Math.max(0.75, echelle)
+            });
 
-            const contexte = canvas.getContext("2d", { alpha: false });
+            const canvas = document.createElement("canvas");
+
+            canvas.width = Math.max(
+                1,
+                Math.ceil(viewport.width)
+            );
+
+            canvas.height = Math.max(
+                1,
+                Math.ceil(viewport.height)
+            );
+
+            const contexte = canvas.getContext(
+                "2d",
+                {
+                    alpha: false,
+                    willReadFrequently: false
+                }
+            );
+
             contexte.fillStyle = "#ffffff";
-            contexte.fillRect(0, 0, canvas.width, canvas.height);
+
+            contexte.fillRect(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
 
             await page.render({
                 canvasContext: contexte,
-                viewport: viewport
+                viewport: viewport,
+                intent: "display"
             }).promise;
 
-            const blob = await new Promise(function(resolve) {
-                canvas.toBlob(resolve, "image/jpeg", 0.9);
-            });
+            const blob = await new Promise(
+                function(resolve, reject) {
 
-            if (!blob) {
-                throw new Error("Conversion d'une page PDF impossible.");
+                    canvas.toBlob(
+                        function(resultat) {
+
+                            if (resultat) {
+                                resolve(resultat);
+                            } else {
+                                reject(
+                                    new Error(
+                                        "Conversion de la page " +
+                                        numero +
+                                        " impossible."
+                                    )
+                                );
+                            }
+                        },
+                        "image/jpeg",
+                        0.82
+                    );
+                }
+            );
+
+            /*
+            On stocke des Blob plutôt que des File pour les pages
+            internes du PDF. C'est plus simple et plus fiable dans
+            IndexedDB sur iPhone.
+            */
+            pages.push(blob);
+
+            /*
+            Libération agressive de la mémoire après chaque page.
+            C'est important sur iOS pour les PDF multipages.
+            */
+            if (page.cleanup) {
+                page.cleanup();
             }
 
-            pages.push(
-                new File(
-                    [blob],
-                    "justificatif-page-" + numero + ".jpg",
-                    {
-                        type: "image/jpeg",
-                        lastModified: Date.now()
-                    }
-                )
+            canvas.width = 1;
+            canvas.height = 1;
+
+            /*
+            On rend la main à Safari entre deux pages pour qu'iOS
+            puisse libérer la mémoire avant de traiter la suivante.
+            */
+            await new Promise(
+                function(resolve) {
+                    setTimeout(resolve, 40);
+                }
             );
         }
 
@@ -1046,24 +1137,52 @@ async function importerPdf(fichier) {
         document.getElementById("apercu").src =
             URL.createObjectURL(photoChoisie);
 
-        const badge = document.getElementById("badgePdf");
         badge.style.display = "inline-block";
+
         badge.textContent =
             pages.length === 1
             ? "PDF · 1 page"
             : "PDF · " + pages.length + " pages";
 
-        document.getElementById("photoZone").style.display = "block";
+        photoZone.style.display = "block";
+
+        if (documentPdf.cleanup) {
+            documentPdf.cleanup();
+        }
+
+        if (documentPdf.destroy) {
+            await documentPdf.destroy();
+        }
 
         window.scrollTo({
-            top: document.getElementById("photoZone").offsetTop - 15,
+            top: photoZone.offsetTop - 15,
             behavior: "smooth"
         });
 
     } catch (erreur) {
-        console.error(erreur);
-        alert("Impossible d'importer ce PDF.");
-        document.getElementById("importPhoto").value = "";
+
+        console.error(
+            "Erreur import PDF :",
+            erreur
+        );
+
+        pagesChoisies = null;
+        photoChoisie = null;
+
+        badge.style.display = "none";
+        badge.textContent = "";
+
+        photoZone.style.display = "none";
+
+        document.getElementById(
+            "importPhoto"
+        ).value = "";
+
+        alert(
+            "Impossible d'importer ce PDF multipage. " +
+            "Réessaie avec ce fichier. Si le problème persiste, " +
+            "dis-moi combien de pages il contient."
+        );
     }
 }
 
