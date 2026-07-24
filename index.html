@@ -1,0 +1,2828 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Notes de frais</title>
+
+<script src="https://unpkg.com/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
+
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    max-width: 750px;
+    margin: auto;
+}
+
+h1 {
+    text-align: center;
+}
+
+.periode {
+    background: #f2f2f2;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+button {
+    padding: 12px;
+    margin: 5px;
+    font-size: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+input,
+select {
+    padding: 10px;
+    font-size: 16px;
+    margin: 5px 0 15px 0;
+    max-width: 420px;
+}
+
+input[type="text"],
+input[type="date"] {
+    width: 90%;
+}
+
+img {
+    max-width: 100%;
+    border-radius: 10px;
+}
+
+.categorie-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+
+/* FILTRES */
+
+.filtres {
+    margin-top: 25px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+}
+
+.filtres h3 {
+    margin-top: 0;
+}
+
+.filtre-categories label {
+    display: block;
+    margin: 8px 0;
+}
+
+.actions-filtres {
+    margin-top: 10px;
+}
+
+
+/* CATÉGORIES */
+
+.groupe-categorie {
+    margin-top: 15px;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.entete-categorie {
+    padding: 15px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.contenu-categorie {
+    display: none;
+    padding: 10px;
+}
+
+.compteur {
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.ticket {
+    border: 1px solid #ccc;
+    padding: 12px;
+    margin-top: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.ticket img {
+    width: 110px;
+    max-height: 140px;
+    object-fit: cover;
+}
+
+.message-vide {
+    padding: 15px;
+}
+
+
+/* FICHE */
+
+#ficheTicket {
+    display: none;
+}
+
+#fichePhoto {
+    max-height: 500px;
+    object-fit: contain;
+}
+
+
+/* EXPORT */
+
+.export {
+    margin-top: 30px;
+    padding: 15px;
+    border: 2px solid #aaa;
+    border-radius: 12px;
+}
+
+.export select {
+    width: 100%;
+    max-width: 450px;
+}
+
+#zonePdf {
+    display: none;
+    margin-top: 15px;
+}
+
+.lien-pdf {
+    display: block;
+    margin: 8px 0;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    text-decoration: none;
+}
+
+#statutExport {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+</style>
+</head>
+
+
+<body>
+
+
+<h1>📒 Notes de frais</h1>
+
+
+<div class="periode">
+
+    <strong>Période actuelle</strong>
+
+    <br><br>
+
+    <span id="periodeActuelle"></span>
+
+</div>
+
+
+
+<div id="ecranPrincipal">
+
+
+    <!-- AJOUT -->
+
+
+    <button onclick="ouvrirPhoto()">
+        📷 Ajouter un justificatif
+    </button>
+
+
+    <input
+        id="prisePhoto"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style="display:none"
+    >
+
+
+    <div id="photoZone" style="display:none">
+
+        <h2>Aperçu</h2>
+
+        <img id="apercu">
+
+        <br><br>
+
+        <button onclick="ouvrirPhoto()">
+            🔄 Reprendre
+        </button>
+
+
+        <h2>Informations</h2>
+
+
+        <label>
+            Date du justificatif :
+        </label>
+
+        <br>
+
+        <input
+            type="date"
+            id="dateTicket"
+        >
+
+
+        <br>
+
+
+        <label>
+            Nom :
+        </label>
+
+        <br>
+
+        <input
+            id="nomTicket"
+            type="text"
+            placeholder="Ex : Restaurant client"
+        >
+
+
+        <h3>Catégorie</h3>
+
+
+        <div class="categorie-buttons">
+
+            <button onclick="enregistrerTicket('Restauration')">
+                🍽️ Restauration
+            </button>
+
+            <button onclick="enregistrerTicket('Hébergements')">
+                🏨 Hébergements
+            </button>
+
+            <button onclick="enregistrerTicket('Transport - Péage')">
+                🚗 Transport - Péage
+            </button>
+
+            <button onclick="enregistrerTicket('Divers - Carburant')">
+                ⛽ Divers - Carburant
+            </button>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- FILTRES -->
+
+
+    <div class="filtres">
+
+        <h3>🔎 Filtres</h3>
+
+        <strong>Catégories</strong>
+
+
+        <div class="filtre-categories">
+
+            <label>
+                <input
+                    type="checkbox"
+                    class="filtreCategorie"
+                    value="Restauration"
+                >
+                🍽️ Restauration
+            </label>
+
+            <label>
+                <input
+                    type="checkbox"
+                    class="filtreCategorie"
+                    value="Hébergements"
+                >
+                🏨 Hébergements
+            </label>
+
+            <label>
+                <input
+                    type="checkbox"
+                    class="filtreCategorie"
+                    value="Transport - Péage"
+                >
+                🚗 Transport - Péage
+            </label>
+
+            <label>
+                <input
+                    type="checkbox"
+                    class="filtreCategorie"
+                    value="Divers - Carburant"
+                >
+                ⛽ Divers - Carburant
+            </label>
+
+        </div>
+
+
+        <br>
+
+
+        <strong>Date ou intervalle</strong>
+
+
+        <br><br>
+
+
+        Du :
+
+        <br>
+
+        <input
+            type="date"
+            id="filtreDateDebut"
+        >
+
+
+        <br>
+
+
+        Au :
+
+        <br>
+
+        <input
+            type="date"
+            id="filtreDateFin"
+        >
+
+
+        <div class="actions-filtres">
+
+            <button onclick="appliquerFiltres()">
+                🔎 Appliquer
+            </button>
+
+            <button onclick="reinitialiserFiltres()">
+                ↩️ Réinitialiser
+            </button>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- LISTE -->
+
+
+    <h2>Mes justificatifs</h2>
+
+    <div id="liste"></div>
+
+
+
+    <!-- EXPORT -->
+
+
+    <div class="export">
+
+        <h2>📄 Extraire</h2>
+
+
+        <label>
+            Période à extraire :
+        </label>
+
+        <br>
+
+        <select id="periodeExport"></select>
+
+
+        <br>
+
+
+        <button
+            id="boutonExtraire"
+            onclick="extrairePeriode()"
+        >
+            📄 Extraire
+        </button>
+
+
+        <div id="statutExport"></div>
+
+
+        <div id="zonePdf">
+
+            <h3>PDF prêts</h3>
+
+            <div id="liensPdf"></div>
+
+
+            <button onclick="partagerPdfGeneres()">
+                ✉️ Partager / envoyer
+            </button>
+
+
+            <button onclick="nettoyerPeriodeExportee()">
+                🧹 Nettoyer cette période
+            </button>
+
+        </div>
+
+    </div>
+
+
+</div>
+
+
+
+<!-- FICHE TICKET -->
+
+
+<div id="ficheTicket">
+
+
+    <button onclick="fermerFiche()">
+        ← Retour
+    </button>
+
+
+    <h2>Justificatif</h2>
+
+
+    <img id="fichePhoto">
+
+
+    <br><br>
+
+
+    <label>Date :</label>
+
+    <br>
+
+    <input
+        type="date"
+        id="ficheDate"
+    >
+
+
+    <br>
+
+
+    <label>Nom :</label>
+
+    <br>
+
+    <input
+        id="ficheNom"
+        type="text"
+    >
+
+
+    <h3>Catégorie</h3>
+
+
+    <select id="ficheCategorie">
+
+        <option value="Restauration">
+            Restauration
+        </option>
+
+        <option value="Hébergements">
+            Hébergements
+        </option>
+
+        <option value="Transport - Péage">
+            Transport - Péage
+        </option>
+
+        <option value="Divers - Carburant">
+            Divers - Carburant
+        </option>
+
+    </select>
+
+
+    <br><br>
+
+
+    <button onclick="sauvegarderModification()">
+        💾 Enregistrer les modifications
+    </button>
+
+
+    <button onclick="supprimerTicket()">
+        🗑️ Supprimer
+    </button>
+
+
+</div>
+
+
+
+<script>
+
+
+let photoChoisie = null;
+let db = null;
+let ticketOuvert = null;
+let tousLesTickets = [];
+
+let fichiersPdfGeneres = [];
+let periodeDernierExport = null;
+let urlsPdf = [];
+
+
+const categories = [
+
+    {
+        nom: "Restauration",
+        icone: "🍽️",
+        fichier: "Restauration"
+    },
+
+    {
+        nom: "Hébergements",
+        icone: "🏨",
+        fichier: "Hebergements"
+    },
+
+    {
+        nom: "Transport - Péage",
+        icone: "🚗",
+        fichier: "Transport-Peage"
+    },
+
+    {
+        nom: "Divers - Carburant",
+        icone: "⛽",
+        fichier: "Divers-Carburant"
+    }
+
+];
+
+
+
+/* ========================================= */
+/* INDEXED DB */
+/* ========================================= */
+
+
+const requete =
+    indexedDB.open(
+        "NotesDeFrais",
+        1
+    );
+
+
+requete.onupgradeneeded =
+    function(event) {
+
+        db =
+            event.target.result;
+
+        if (
+            !db.objectStoreNames.contains(
+                "tickets"
+            )
+        ) {
+
+            db.createObjectStore(
+                "tickets",
+                {
+                    keyPath: "id",
+                    autoIncrement: true
+                }
+            );
+
+        }
+
+    };
+
+
+requete.onsuccess =
+    function(event) {
+
+        db =
+            event.target.result;
+
+        afficherPeriodeActuelle();
+
+        chargerTickets();
+
+    };
+
+
+requete.onerror =
+    function() {
+
+        alert(
+            "Impossible d'ouvrir la base de données."
+        );
+
+    };
+
+
+
+/* ========================================= */
+/* PÉRIODES */
+/* ========================================= */
+
+
+function calculerPeriode(dateTexte) {
+
+    let date;
+
+
+    if (dateTexte) {
+
+        const morceaux =
+            dateTexte.split("-");
+
+        date =
+            new Date(
+                Number(morceaux[0]),
+                Number(morceaux[1]) - 1,
+                Number(morceaux[2])
+            );
+
+    }
+
+    else {
+
+        date = new Date();
+
+    }
+
+
+    const annee =
+        date.getFullYear();
+
+    const mois =
+        date.getMonth();
+
+    const jour =
+        date.getDate();
+
+
+    let debut;
+    let fin;
+
+
+    if (jour >= 20) {
+
+        debut =
+            new Date(
+                annee,
+                mois,
+                20
+            );
+
+        fin =
+            new Date(
+                annee,
+                mois + 1,
+                20
+            );
+
+    }
+
+    else {
+
+        debut =
+            new Date(
+                annee,
+                mois - 1,
+                20
+            );
+
+        fin =
+            new Date(
+                annee,
+                mois,
+                20
+            );
+
+    }
+
+
+    return {
+
+        debutISO:
+            dateVersISO(debut),
+
+        finISO:
+            dateVersISO(fin),
+
+        debutAffichage:
+            formaterDate(debut),
+
+        finAffichage:
+            formaterDate(fin)
+
+    };
+
+}
+
+
+
+function dateVersISO(date) {
+
+    const annee =
+        date.getFullYear();
+
+    const mois =
+        String(
+            date.getMonth() + 1
+        ).padStart(
+            2,
+            "0"
+        );
+
+    const jour =
+        String(
+            date.getDate()
+        ).padStart(
+            2,
+            "0"
+        );
+
+
+    return `${annee}-${mois}-${jour}`;
+
+}
+
+
+
+function formaterDate(date) {
+
+    return date.toLocaleDateString(
+        "fr-FR",
+        {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+        }
+    );
+
+}
+
+
+
+function formaterDateISO(dateISO) {
+
+    const morceaux =
+        dateISO.split("-");
+
+    const date =
+        new Date(
+            Number(morceaux[0]),
+            Number(morceaux[1]) - 1,
+            Number(morceaux[2])
+        );
+
+    return formaterDate(date);
+
+}
+
+
+
+function afficherPeriodeActuelle() {
+
+    const periode =
+        calculerPeriode();
+
+    document.getElementById(
+        "periodeActuelle"
+    ).textContent =
+
+        periode.debutAffichage +
+        " → " +
+        periode.finAffichage;
+
+}
+
+
+
+/* ========================================= */
+/* PHOTO */
+/* ========================================= */
+
+
+function ouvrirPhoto() {
+
+    document.getElementById(
+        "prisePhoto"
+    ).click();
+
+}
+
+
+
+document
+.getElementById(
+    "prisePhoto"
+)
+.addEventListener(
+    "change",
+
+    function() {
+
+        photoChoisie =
+            this.files[0];
+
+        if (!photoChoisie) {
+            return;
+        }
+
+        document.getElementById(
+            "apercu"
+        ).src =
+
+            URL.createObjectURL(
+                photoChoisie
+            );
+
+        document.getElementById(
+            "photoZone"
+        ).style.display =
+            "block";
+
+    }
+);
+
+
+
+/* ========================================= */
+/* ENREGISTRER */
+/* ========================================= */
+
+
+function enregistrerTicket(categorie) {
+
+    if (!photoChoisie) {
+
+        alert(
+            "Aucune photo sélectionnée."
+        );
+
+        return;
+
+    }
+
+
+    const nom =
+
+        document
+        .getElementById(
+            "nomTicket"
+        )
+        .value
+        .trim();
+
+
+    const date =
+
+        document
+        .getElementById(
+            "dateTicket"
+        )
+        .value;
+
+
+    if (!nom || !date) {
+
+        alert(
+            "Merci de renseigner la date et le nom."
+        );
+
+        return;
+
+    }
+
+
+    const periode =
+        calculerPeriode(date);
+
+
+    const ticket = {
+
+        photo:
+            photoChoisie,
+
+        categorie:
+            categorie,
+
+        nom:
+            nom,
+
+        date:
+            date,
+
+        periodeDebut:
+            periode.debutISO,
+
+        periodeFin:
+            periode.finISO
+
+    };
+
+
+    const transaction =
+
+        db.transaction(
+            ["tickets"],
+            "readwrite"
+        );
+
+
+    transaction
+    .objectStore(
+        "tickets"
+    )
+    .add(
+        ticket
+    );
+
+
+    transaction.oncomplete =
+        function() {
+
+            resetForm();
+
+            chargerTickets();
+
+        };
+
+}
+
+
+
+/* ========================================= */
+/* CHARGER */
+/* ========================================= */
+
+
+function chargerTickets() {
+
+    const transaction =
+
+        db.transaction(
+            ["tickets"],
+            "readonly"
+        );
+
+
+    const demande =
+
+        transaction
+        .objectStore(
+            "tickets"
+        )
+        .getAll();
+
+
+    demande.onsuccess =
+        function() {
+
+            tousLesTickets =
+                demande.result;
+
+
+            tousLesTickets.sort(
+                function(a, b) {
+
+                    return b.date.localeCompare(
+                        a.date
+                    );
+
+                }
+            );
+
+
+            remplirPeriodesExport();
+
+            afficherTickets(
+                tousLesTickets
+            );
+
+        };
+
+}
+
+
+
+/* ========================================= */
+/* FILTRES */
+/* ========================================= */
+
+
+function appliquerFiltres() {
+
+    const categoriesChoisies =
+
+        Array.from(
+            document.querySelectorAll(
+                ".filtreCategorie:checked"
+            )
+        )
+        .map(
+            function(element) {
+
+                return element.value;
+
+            }
+        );
+
+
+    const dateDebut =
+
+        document.getElementById(
+            "filtreDateDebut"
+        ).value;
+
+
+    const dateFin =
+
+        document.getElementById(
+            "filtreDateFin"
+        ).value;
+
+
+    const resultat =
+
+        tousLesTickets.filter(
+            function(ticket) {
+
+
+                if (
+                    categoriesChoisies.length > 0
+                    &&
+                    !categoriesChoisies.includes(
+                        ticket.categorie
+                    )
+                ) {
+
+                    return false;
+
+                }
+
+
+                if (
+                    dateDebut
+                    &&
+                    ticket.date < dateDebut
+                ) {
+
+                    return false;
+
+                }
+
+
+                if (
+                    dateFin
+                    &&
+                    ticket.date > dateFin
+                ) {
+
+                    return false;
+
+                }
+
+
+                return true;
+
+            }
+        );
+
+
+    afficherTickets(
+        resultat
+    );
+
+}
+
+
+
+function reinitialiserFiltres() {
+
+    document
+    .querySelectorAll(
+        ".filtreCategorie"
+    )
+    .forEach(
+        function(element) {
+
+            element.checked =
+                false;
+
+        }
+    );
+
+
+    document.getElementById(
+        "filtreDateDebut"
+    ).value =
+        "";
+
+
+    document.getElementById(
+        "filtreDateFin"
+    ).value =
+        "";
+
+
+    afficherTickets(
+        tousLesTickets
+    );
+
+}
+
+
+
+/* ========================================= */
+/* AFFICHAGE PAR CATÉGORIE */
+/* ========================================= */
+
+
+function afficherTickets(tickets) {
+
+    const liste =
+        document.getElementById(
+            "liste"
+        );
+
+
+    liste.innerHTML =
+        "";
+
+
+    if (
+        tickets.length === 0
+    ) {
+
+        liste.innerHTML =
+
+            `<p class="message-vide">
+                Aucun justificatif correspondant.
+            </p>`;
+
+        return;
+
+    }
+
+
+    categories.forEach(
+        function(categorie) {
+
+
+            const ticketsCategorie =
+
+                tickets.filter(
+                    function(ticket) {
+
+                        return (
+                            ticket.categorie ===
+                            categorie.nom
+                        );
+
+                    }
+                );
+
+
+            if (
+                ticketsCategorie.length === 0
+            ) {
+
+                return;
+
+            }
+
+
+            const groupe =
+
+                document.createElement(
+                    "div"
+                );
+
+
+            groupe.className =
+                "groupe-categorie";
+
+
+            const entete =
+
+                document.createElement(
+                    "div"
+                );
+
+
+            entete.className =
+                "entete-categorie";
+
+
+            entete.innerHTML = `
+
+                <span>
+
+                    ${categorie.icone}
+                    ${categorie.nom}
+
+                </span>
+
+                <span class="compteur">
+
+                    ${ticketsCategorie.length}
+                    ▼
+
+                </span>
+
+            `;
+
+
+            const contenu =
+
+                document.createElement(
+                    "div"
+                );
+
+
+            contenu.className =
+                "contenu-categorie";
+
+
+            entete.onclick =
+                function() {
+
+
+                    const ouvert =
+
+                        contenu.style.display ===
+                        "block";
+
+
+                    contenu.style.display =
+
+                        ouvert
+                        ? "none"
+                        : "block";
+
+
+                    entete
+                    .querySelector(
+                        ".compteur"
+                    )
+                    .textContent =
+
+                        ticketsCategorie.length +
+                        (ouvert ? " ▼" : " ▲");
+
+                };
+
+
+            ticketsCategorie.forEach(
+                function(ticket) {
+
+
+                    const urlPhoto =
+
+                        URL.createObjectURL(
+                            ticket.photo
+                        );
+
+
+                    const bloc =
+
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    bloc.className =
+                        "ticket";
+
+
+                    bloc.innerHTML = `
+
+                        <img
+                            src="${urlPhoto}"
+                            alt="Justificatif"
+                        >
+
+                        <p>
+                            📅
+                            ${formaterDateISO(ticket.date)}
+                        </p>
+
+                        <p>
+                            📝
+                            ${ticket.nom}
+                        </p>
+
+                    `;
+
+
+                    bloc.onclick =
+                        function() {
+
+                            ouvrirFiche(
+                                ticket.id
+                            );
+
+                        };
+
+
+                    contenu.appendChild(
+                        bloc
+                    );
+
+                }
+            );
+
+
+            groupe.appendChild(
+                entete
+            );
+
+
+            groupe.appendChild(
+                contenu
+            );
+
+
+            liste.appendChild(
+                groupe
+            );
+
+        }
+    );
+
+}
+
+
+
+/* ========================================= */
+/* FICHE */
+/* ========================================= */
+
+
+function ouvrirFiche(id) {
+
+    const transaction =
+
+        db.transaction(
+            ["tickets"],
+            "readonly"
+        );
+
+
+    const demande =
+
+        transaction
+        .objectStore(
+            "tickets"
+        )
+        .get(id);
+
+
+    demande.onsuccess =
+        function() {
+
+            ticketOuvert =
+                demande.result;
+
+
+            if (!ticketOuvert) {
+                return;
+            }
+
+
+            document.getElementById(
+                "fichePhoto"
+            ).src =
+
+                URL.createObjectURL(
+                    ticketOuvert.photo
+                );
+
+
+            document.getElementById(
+                "ficheDate"
+            ).value =
+                ticketOuvert.date;
+
+
+            document.getElementById(
+                "ficheNom"
+            ).value =
+                ticketOuvert.nom;
+
+
+            document.getElementById(
+                "ficheCategorie"
+            ).value =
+                ticketOuvert.categorie;
+
+
+            document.getElementById(
+                "ecranPrincipal"
+            ).style.display =
+                "none";
+
+
+            document.getElementById(
+                "ficheTicket"
+            ).style.display =
+                "block";
+
+        };
+
+}
+
+
+
+/* ========================================= */
+/* MODIFIER */
+/* ========================================= */
+
+
+function sauvegarderModification() {
+
+    if (!ticketOuvert) {
+        return;
+    }
+
+
+    const nouvelleDate =
+
+        document.getElementById(
+            "ficheDate"
+        ).value;
+
+
+    const nouveauNom =
+
+        document.getElementById(
+            "ficheNom"
+        ).value.trim();
+
+
+    const nouvelleCategorie =
+
+        document.getElementById(
+            "ficheCategorie"
+        ).value;
+
+
+    if (
+        !nouvelleDate ||
+        !nouveauNom
+    ) {
+
+        alert(
+            "Merci de renseigner la date et le nom."
+        );
+
+        return;
+
+    }
+
+
+    const periode =
+
+        calculerPeriode(
+            nouvelleDate
+        );
+
+
+    ticketOuvert.date =
+        nouvelleDate;
+
+
+    ticketOuvert.nom =
+        nouveauNom;
+
+
+    ticketOuvert.categorie =
+        nouvelleCategorie;
+
+
+    ticketOuvert.periodeDebut =
+        periode.debutISO;
+
+
+    ticketOuvert.periodeFin =
+        periode.finISO;
+
+
+    const transaction =
+
+        db.transaction(
+            ["tickets"],
+            "readwrite"
+        );
+
+
+    transaction
+    .objectStore(
+        "tickets"
+    )
+    .put(
+        ticketOuvert
+    );
+
+
+    transaction.oncomplete =
+        function() {
+
+            fermerFiche();
+
+            chargerTickets();
+
+        };
+
+}
+
+
+
+/* ========================================= */
+/* SUPPRIMER */
+/* ========================================= */
+
+
+function supprimerTicket() {
+
+    if (!ticketOuvert) {
+        return;
+    }
+
+
+    if (
+        !confirm(
+            "Supprimer définitivement ce justificatif ?"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    const transaction =
+
+        db.transaction(
+            ["tickets"],
+            "readwrite"
+        );
+
+
+    transaction
+    .objectStore(
+        "tickets"
+    )
+    .delete(
+        ticketOuvert.id
+    );
+
+
+    transaction.oncomplete =
+        function() {
+
+            ticketOuvert =
+                null;
+
+            fermerFiche();
+
+            chargerTickets();
+
+        };
+
+}
+
+
+
+/* ========================================= */
+/* RETOUR */
+/* ========================================= */
+
+
+function fermerFiche() {
+
+    ticketOuvert =
+        null;
+
+
+    document.getElementById(
+        "ficheTicket"
+    ).style.display =
+        "none";
+
+
+    document.getElementById(
+        "ecranPrincipal"
+    ).style.display =
+        "block";
+
+}
+
+
+
+/* ========================================= */
+/* RESET FORMULAIRE */
+/* ========================================= */
+
+
+function resetForm() {
+
+    photoChoisie =
+        null;
+
+
+    document.getElementById(
+        "prisePhoto"
+    ).value =
+        "";
+
+
+    document.getElementById(
+        "nomTicket"
+    ).value =
+        "";
+
+
+    document.getElementById(
+        "dateTicket"
+    ).value =
+        "";
+
+
+    document.getElementById(
+        "apercu"
+    ).removeAttribute(
+        "src"
+    );
+
+
+    document.getElementById(
+        "photoZone"
+    ).style.display =
+        "none";
+
+}
+
+
+
+/* ========================================= */
+/* PÉRIODES DISPONIBLES POUR EXPORT */
+/* ========================================= */
+
+
+function remplirPeriodesExport() {
+
+    const select =
+        document.getElementById(
+            "periodeExport"
+        );
+
+
+    const ancienneValeur =
+        select.value;
+
+
+    select.innerHTML =
+        "";
+
+
+    const periodes =
+        new Map();
+
+
+    tousLesTickets.forEach(
+        function(ticket) {
+
+
+            const cle =
+
+                ticket.periodeDebut +
+                "|" +
+                ticket.periodeFin;
+
+
+            if (
+                !periodes.has(
+                    cle
+                )
+            ) {
+
+                periodes.set(
+                    cle,
+                    {
+                        debut:
+                            ticket.periodeDebut,
+
+                        fin:
+                            ticket.periodeFin
+                    }
+                );
+
+            }
+
+        }
+    );
+
+
+    const tableau =
+        Array.from(
+            periodes.values()
+        );
+
+
+    tableau.sort(
+        function(a, b) {
+
+            return b.debut.localeCompare(
+                a.debut
+            );
+
+        }
+    );
+
+
+    if (
+        tableau.length === 0
+    ) {
+
+        const option =
+            document.createElement(
+                "option"
+            );
+
+
+        option.value =
+            "";
+
+
+        option.textContent =
+            "Aucune période disponible";
+
+
+        select.appendChild(
+            option
+        );
+
+
+        return;
+
+    }
+
+
+    tableau.forEach(
+        function(periode) {
+
+
+            const option =
+
+                document.createElement(
+                    "option"
+                );
+
+
+            option.value =
+
+                periode.debut +
+                "|" +
+                periode.fin;
+
+
+            option.textContent =
+
+                formaterDateISO(
+                    periode.debut
+                )
+
+                +
+
+                " → "
+
+                +
+
+                formaterDateISO(
+                    periode.fin
+                );
+
+
+            select.appendChild(
+                option
+            );
+
+        }
+    );
+
+
+    if (
+        ancienneValeur
+        &&
+        Array.from(
+            select.options
+        )
+        .some(
+            option =>
+                option.value ===
+                ancienneValeur
+        )
+    ) {
+
+        select.value =
+            ancienneValeur;
+
+    }
+
+}
+
+
+
+/* ========================================= */
+/* CONVERTIR PHOTO POUR PDF */
+/* ========================================= */
+
+
+function fichierVersDataURL(fichier) {
+
+    return new Promise(
+        function(resolve, reject) {
+
+
+            const lecteur =
+                new FileReader();
+
+
+            lecteur.onload =
+                function() {
+
+                    resolve(
+                        lecteur.result
+                    );
+
+                };
+
+
+            lecteur.onerror =
+                reject;
+
+
+            lecteur.readAsDataURL(
+                fichier
+            );
+
+        }
+    );
+
+}
+
+
+
+function chargerImage(dataUrl) {
+
+    return new Promise(
+        function(resolve, reject) {
+
+
+            const image =
+                new Image();
+
+
+            image.onload =
+                function() {
+
+                    resolve(
+                        image
+                    );
+
+                };
+
+
+            image.onerror =
+                reject;
+
+
+            image.src =
+                dataUrl;
+
+        }
+    );
+
+}
+
+
+
+/* ========================================= */
+/* CRÉATION D'UN PDF */
+/* ========================================= */
+
+
+async function creerPdfCategorie(
+    categorie,
+    tickets
+) {
+
+    const {
+        jsPDF
+    } =
+        window.jspdf;
+
+
+    const pdf =
+        new jsPDF({
+            unit: "mm",
+            format: "a4"
+        });
+
+
+    for (
+        let i = 0;
+        i < tickets.length;
+        i++
+    ) {
+
+
+        if (i > 0) {
+
+            pdf.addPage();
+
+        }
+
+
+        const dataUrl =
+
+            await fichierVersDataURL(
+                tickets[i].photo
+            );
+
+
+        const image =
+
+            await chargerImage(
+                dataUrl
+            );
+
+
+        const largeurPage =
+            210;
+
+
+        const hauteurPage =
+            297;
+
+
+        const marge =
+            8;
+
+
+        const largeurMax =
+            largeurPage -
+            (marge * 2);
+
+
+        const hauteurMax =
+            hauteurPage -
+            (marge * 2);
+
+
+        const ratioImage =
+
+            image.width /
+            image.height;
+
+
+        let largeur =
+            largeurMax;
+
+
+        let hauteur =
+
+            largeur /
+            ratioImage;
+
+
+        if (
+            hauteur >
+            hauteurMax
+        ) {
+
+            hauteur =
+                hauteurMax;
+
+
+            largeur =
+
+                hauteur *
+                ratioImage;
+
+        }
+
+
+        const x =
+
+            (
+                largeurPage -
+                largeur
+            )
+            / 2;
+
+
+        const y =
+
+            (
+                hauteurPage -
+                hauteur
+            )
+            / 2;
+
+
+        let formatImage =
+            "JPEG";
+
+
+        if (
+            dataUrl.startsWith(
+                "data:image/png"
+            )
+        ) {
+
+            formatImage =
+                "PNG";
+
+        }
+
+
+        pdf.addImage(
+            dataUrl,
+            formatImage,
+            x,
+            y,
+            largeur,
+            hauteur
+        );
+
+    }
+
+
+    return pdf.output(
+        "blob"
+    );
+
+}
+
+
+
+/* ========================================= */
+/* EXTRACTION */
+/* ========================================= */
+
+
+async function extrairePeriode() {
+
+    if (
+        tousLesTickets.length ===
+        0
+    ) {
+
+        alert(
+            "Il n'y a aucun justificatif à extraire."
+        );
+
+        return;
+
+    }
+
+
+    const valeur =
+
+        document.getElementById(
+            "periodeExport"
+        ).value;
+
+
+    if (!valeur) {
+
+        alert(
+            "Aucune période disponible."
+        );
+
+        return;
+
+    }
+
+
+    const [
+        debut,
+        fin
+    ] =
+        valeur.split("|");
+
+
+    const ticketsPeriode =
+
+        tousLesTickets.filter(
+            function(ticket) {
+
+                return (
+
+                    ticket.periodeDebut ===
+                    debut
+
+                    &&
+
+                    ticket.periodeFin ===
+                    fin
+
+                );
+
+            }
+        );
+
+
+    if (
+        ticketsPeriode.length ===
+        0
+    ) {
+
+        alert(
+            "Aucun justificatif dans cette période."
+        );
+
+        return;
+
+    }
+
+
+    document.getElementById(
+        "statutExport"
+    ).textContent =
+
+        "Création des PDF...";
+
+
+    document.getElementById(
+        "zonePdf"
+    ).style.display =
+        "none";
+
+
+    fichiersPdfGeneres =
+        [];
+
+
+    urlsPdf.forEach(
+        function(url) {
+
+            URL.revokeObjectURL(
+                url
+            );
+
+        }
+    );
+
+
+    urlsPdf =
+        [];
+
+
+    periodeDernierExport =
+        {
+            debut: debut,
+            fin: fin
+        };
+
+
+    try {
+
+
+        for (
+            const categorie of
+            categories
+        ) {
+
+
+            const ticketsCategorie =
+
+                ticketsPeriode
+                .filter(
+                    function(ticket) {
+
+                        return (
+
+                            ticket.categorie ===
+                            categorie.nom
+
+                        );
+
+                    }
+                )
+                .sort(
+                    function(a, b) {
+
+                        return a.date.localeCompare(
+                            b.date
+                        );
+
+                    }
+                );
+
+
+            /*
+            On crée quand même
+            un PDF pour chacune des
+            4 catégories.
+
+            Si la catégorie est vide,
+            le PDF contient une page
+            blanche.
+            */
+
+
+            let blob;
+
+
+            if (
+                ticketsCategorie.length >
+                0
+            ) {
+
+
+                blob =
+
+                    await creerPdfCategorie(
+                        categorie,
+                        ticketsCategorie
+                    );
+
+
+            }
+
+            else {
+
+
+                const {
+                    jsPDF
+                } =
+                    window.jspdf;
+
+
+                const pdfVide =
+                    new jsPDF({
+                        unit: "mm",
+                        format: "a4"
+                    });
+
+
+                blob =
+                    pdfVide.output(
+                        "blob"
+                    );
+
+            }
+
+
+            const nomFichier =
+
+                categorie.fichier +
+                "_" +
+                debut +
+                "_" +
+                fin +
+                ".pdf";
+
+
+            const fichier =
+
+                new File(
+                    [blob],
+                    nomFichier,
+                    {
+                        type:
+                            "application/pdf"
+                    }
+                );
+
+
+            fichiersPdfGeneres.push(
+                fichier
+            );
+
+        }
+
+
+        afficherPdfGeneres();
+
+
+        document.getElementById(
+            "statutExport"
+        ).textContent =
+
+            "✅ Les 4 PDF sont prêts.";
+
+
+        /*
+        On essaie automatiquement
+        d'ouvrir le partage natif.
+        */
+
+
+        await essayerPartageAutomatique();
+
+
+    }
+
+    catch (erreur) {
+
+
+        console.error(
+            erreur
+        );
+
+
+        document.getElementById(
+            "statutExport"
+        ).textContent =
+
+            "❌ Erreur pendant la création des PDF.";
+
+
+        alert(
+            "Une erreur est survenue pendant la création des PDF."
+        );
+
+    }
+
+}
+
+
+
+/* ========================================= */
+/* LIENS PDF */
+/* ========================================= */
+
+
+function afficherPdfGeneres() {
+
+    const zone =
+
+        document.getElementById(
+            "zonePdf"
+        );
+
+
+    const liens =
+
+        document.getElementById(
+            "liensPdf"
+        );
+
+
+    liens.innerHTML =
+        "";
+
+
+    urlsPdf =
+        [];
+
+
+    fichiersPdfGeneres.forEach(
+        function(fichier) {
+
+
+            const url =
+
+                URL.createObjectURL(
+                    fichier
+                );
+
+
+            urlsPdf.push(
+                url
+            );
+
+
+            const lien =
+
+                document.createElement(
+                    "a"
+                );
+
+
+            lien.href =
+                url;
+
+
+            lien.download =
+                fichier.name;
+
+
+            lien.className =
+                "lien-pdf";
+
+
+            lien.textContent =
+
+                "📄 " +
+                fichier.name;
+
+
+            liens.appendChild(
+                lien
+            );
+
+        }
+    );
+
+
+    zone.style.display =
+        "block";
+
+}
+
+
+
+/* ========================================= */
+/* PARTAGE */
+/* ========================================= */
+
+
+async function essayerPartageAutomatique() {
+
+    if (
+        !navigator.share
+    ) {
+
+        return;
+
+    }
+
+
+    if (
+        navigator.canShare
+        &&
+        !navigator.canShare({
+            files:
+                fichiersPdfGeneres
+        })
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+
+        await navigator.share({
+
+            title:
+                "Notes de frais",
+
+            text:
+                "Notes de frais " +
+                formaterDateISO(
+                    periodeDernierExport.debut
+                )
+                +
+                " → "
+                +
+                formaterDateISO(
+                    periodeDernierExport.fin
+                ),
+
+            files:
+                fichiersPdfGeneres
+
+        });
+
+
+        proposerNettoyage();
+
+
+    }
+
+    catch (erreur) {
+
+
+        /*
+        L'utilisateur peut simplement
+        fermer le menu de partage.
+        Ce n'est pas une erreur grave.
+        */
+
+
+        console.log(
+            "Partage annulé ou indisponible.",
+            erreur
+        );
+
+    }
+
+}
+
+
+
+async function partagerPdfGeneres() {
+
+    if (
+        fichiersPdfGeneres.length ===
+        0
+    ) {
+
+        alert(
+            "Commence par créer les PDF."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        !navigator.share
+    ) {
+
+        alert(
+            "Le partage direct n'est pas disponible ici. Utilise les liens PDF affichés."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        navigator.canShare
+        &&
+        !navigator.canShare({
+            files:
+                fichiersPdfGeneres
+        })
+    ) {
+
+        alert(
+            "Ce navigateur ne permet pas de partager directement ces fichiers. Utilise les liens PDF."
+        );
+
+        return;
+
+    }
+
+
+    try {
+
+
+        await navigator.share({
+
+            title:
+                "Notes de frais",
+
+            text:
+                "Notes de frais",
+
+            files:
+                fichiersPdfGeneres
+
+        });
+
+
+        proposerNettoyage();
+
+
+    }
+
+    catch (erreur) {
+
+
+        console.log(
+            erreur
+        );
+
+    }
+
+}
+
+
+
+/* ========================================= */
+/* PROPOSITION NETTOYAGE */
+/* ========================================= */
+
+
+function proposerNettoyage() {
+
+    setTimeout(
+        function() {
+
+
+            const choix =
+
+                confirm(
+                    "Les PDF ont été partagés.\n\nSupprimer les justificatifs de cette période de l'application ?"
+                );
+
+
+            if (choix) {
+
+                nettoyerPeriodeExportee();
+
+            }
+
+        },
+        300
+    );
+
+}
+
+
+
+/* ========================================= */
+/* NETTOYER PÉRIODE */
+/* ========================================= */
+
+
+function nettoyerPeriodeExportee() {
+
+    if (
+        !periodeDernierExport
+    ) {
+
+        alert(
+            "Aucune période n'a encore été extraite."
+        );
+
+        return;
+
+    }
+
+
+    const ticketsASupprimer =
+
+        tousLesTickets.filter(
+            function(ticket) {
+
+                return (
+
+                    ticket.periodeDebut ===
+                    periodeDernierExport.debut
+
+                    &&
+
+                    ticket.periodeFin ===
+                    periodeDernierExport.fin
+
+                );
+
+            }
+        );
+
+
+    if (
+        ticketsASupprimer.length ===
+        0
+    ) {
+
+        alert(
+            "Cette période est déjà vide."
+        );
+
+        return;
+
+    }
+
+
+    const confirmation =
+
+        confirm(
+
+            "Supprimer définitivement les "
+            +
+            ticketsASupprimer.length
+            +
+            " justificatif(s) de la période "
+            +
+            formaterDateISO(
+                periodeDernierExport.debut
+            )
+            +
+            " → "
+            +
+            formaterDateISO(
+                periodeDernierExport.fin
+            )
+            +
+            " ?"
+
+        );
+
+
+    if (!confirmation) {
+
+        return;
+
+    }
+
+
+    const transaction =
+
+        db.transaction(
+            ["tickets"],
+            "readwrite"
+        );
+
+
+    const stockage =
+
+        transaction.objectStore(
+            "tickets"
+        );
+
+
+    ticketsASupprimer.forEach(
+        function(ticket) {
+
+            stockage.delete(
+                ticket.id
+            );
+
+        }
+    );
+
+
+    transaction.oncomplete =
+        function() {
+
+
+            fichiersPdfGeneres =
+                [];
+
+
+            periodeDernierExport =
+                null;
+
+
+            urlsPdf.forEach(
+                function(url) {
+
+                    URL.revokeObjectURL(
+                        url
+                    );
+
+                }
+            );
+
+
+            urlsPdf =
+                [];
+
+
+            document.getElementById(
+                "zonePdf"
+            ).style.display =
+                "none";
+
+
+            document.getElementById(
+                "statutExport"
+            ).textContent =
+
+                "✅ Période nettoyée.";
+
+
+            chargerTickets();
+
+        };
+
+}
+
+
+</script>
+
+
+</body>
+
+</html>
