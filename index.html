@@ -7,6 +7,8 @@
 
 <script src="https://unpkg.com/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
 <link
   rel="stylesheet"
   href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css"
@@ -17,152 +19,296 @@
 
 <style>
 :root {
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    color: #172033;
+    background: #eef3f8;
+    --fond: #eef3f8;
+    --carte: #ffffff;
+    --texte: #172033;
+    --secondaire: #64748b;
+    --bleu: #1f4f82;
+    --bleu-clair: #eaf2fb;
+    --bordure: #dce5ef;
+    --danger: #b42318;
+    --ombre: 0 8px 24px rgba(31, 79, 130, .08);
+}
+
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html {
+    background: var(--fond);
 }
 
 body {
-    padding: 20px;
+    padding: max(18px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
     max-width: 750px;
     margin: auto;
+    background: var(--fond);
+    color: var(--texte);
 }
 
 h1 {
-    text-align: center;
+    text-align: left;
+    margin: 8px 2px 18px;
+    font-size: 30px;
+    letter-spacing: -.7px;
+}
+
+h2 {
+    font-size: 21px;
+    margin: 26px 2px 12px;
+}
+
+h3 {
+    font-size: 17px;
 }
 
 .periode,
 .filtres,
 .export,
-.stockage {
-    padding: 15px;
-    border-radius: 12px;
-    margin-top: 20px;
+.stockage,
+#photoZone,
+#ficheTicket {
+    background: var(--carte);
+    border: 1px solid var(--bordure);
+    border-radius: 18px;
+    box-shadow: var(--ombre);
 }
 
 .periode {
-    background: #f2f2f2;
-    text-align: center;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+    text-align: left;
 }
 
-.filtres {
-    border: 1px solid #ccc;
+.periode strong {
+    display: block;
+    color: var(--secondaire);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 6px;
 }
 
-.export {
-    border: 2px solid #aaa;
+#periodeActuelle {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--bleu);
 }
 
-.stockage {
-    background: #f5f5f5;
-    border: 1px solid #ccc;
+.actions-ajout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 18px 0 8px;
 }
 
 button {
-    padding: 12px;
-    margin: 5px;
+    appearance: none;
+    border: 1px solid transparent;
+    padding: 13px 16px;
+    margin: 4px 0;
+    min-height: 48px;
     font-size: 16px;
-    border-radius: 8px;
+    font-weight: 650;
+    border-radius: 12px;
     cursor: pointer;
+    background: var(--bleu-clair);
+    color: var(--bleu);
+}
+
+button:active {
+    transform: scale(.985);
+}
+
+.actions-ajout button:first-child,
+#boutonExtraire,
+#photoZone .categorie-buttons button,
+#ficheTicket button:first-of-type {
+    background: var(--bleu);
+    color: white;
+}
+
+.actions-ajout button:nth-child(2) {
+    background: white;
+    border-color: #b9cbe0;
 }
 
 input,
 select {
-    padding: 10px;
+    width: 100%;
+    max-width: none;
+    padding: 13px 14px;
+    min-height: 48px;
     font-size: 16px;
-    margin: 5px 0 15px;
-    max-width: 420px;
-    box-sizing: border-box;
+    margin: 7px 0 16px;
+    border: 1px solid #cbd7e4;
+    border-radius: 11px;
+    background: #fbfdff;
+    color: var(--texte);
 }
 
-input[type="text"],
-input[type="date"] {
-    width: 90%;
+input:focus,
+select:focus {
+    outline: 2px solid rgba(31,79,130,.18);
+    border-color: var(--bleu);
 }
 
 img {
     max-width: 100%;
-    border-radius: 10px;
+    border-radius: 12px;
 }
 
-.actions-ajout {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 20px;
+#photoZone {
+    display: none;
+    margin-top: 18px;
+    padding: 18px;
+}
+
+#photoZone h2:first-child {
+    margin-top: 0;
+}
+
+#apercu {
+    display: block;
+    width: 100%;
+    max-height: 430px;
+    object-fit: contain;
+    background: #f4f7fa;
 }
 
 .categorie-buttons {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
 }
 
-.filtre-categories label {
-    display: block;
-    margin: 8px 0;
-}
-
-.actions-filtres {
-    margin-top: 10px;
+.categorie-buttons button {
+    margin: 0;
+    text-align: left;
+    min-height: 58px;
 }
 
 .groupe-categorie {
-    margin-top: 15px;
-    border: 1px solid #ccc;
-    border-radius: 12px;
+    margin-top: 11px;
+    background: var(--carte);
+    border: 1px solid var(--bordure);
+    border-radius: 15px;
     overflow: hidden;
+    box-shadow: 0 4px 15px rgba(31,79,130,.05);
 }
 
 .entete-categorie {
-    padding: 15px;
+    padding: 16px;
     cursor: pointer;
-    font-weight: bold;
-    font-size: 18px;
+    font-weight: 700;
+    font-size: 17px;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.contenu-categorie {
-    display: none;
-    padding: 10px;
+.compteur {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--bleu);
+    background: var(--bleu-clair);
+    padding: 6px 9px;
+    border-radius: 999px;
 }
 
-.compteur {
-    font-size: 14px;
-    font-weight: normal;
+.contenu-categorie {
+    display: none;
+    padding: 0 10px 10px;
+    border-top: 1px solid #edf1f5;
 }
 
 .ticket {
-    border: 1px solid #ccc;
-    padding: 12px;
+    display: grid;
+    grid-template-columns: 86px 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 13px;
+    border: 1px solid #e1e8f0;
+    background: #fbfdff;
+    padding: 10px;
     margin-top: 10px;
-    border-radius: 10px;
+    border-radius: 12px;
     cursor: pointer;
 }
 
 .ticket img {
-    width: 110px;
-    max-height: 140px;
+    grid-row: 1 / 3;
+    width: 86px;
+    height: 92px;
     object-fit: cover;
+    border-radius: 9px;
+}
+
+.ticket p {
+    margin: 8px 0 0;
 }
 
 .message-vide {
-    padding: 15px;
+    padding: 18px;
+    color: var(--secondaire);
+    background: white;
+    border: 1px dashed #cbd7e4;
+    border-radius: 14px;
 }
 
-#ficheTicket {
-    display: none;
+.filtres,
+.export,
+.stockage {
+    margin-top: 20px;
+    padding: 18px;
 }
 
-#fichePhoto {
-    max-height: 500px;
-    object-fit: contain;
+.filtres h3,
+.export h2,
+.stockage h2 {
+    margin-top: 0;
+}
+
+.filtre-categories {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 10px 0 16px;
+}
+
+.filtre-categories label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 10px;
+    background: #f7f9fc;
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+.filtre-categories input {
+    width: 20px;
+    min-height: 20px;
+    margin: 0;
+}
+
+.actions-filtres {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+    margin-top: 4px;
+}
+
+.export {
+    border-top: 4px solid var(--bleu);
 }
 
 .export select {
     width: 100%;
-    max-width: 450px;
 }
 
 #zonePdf {
@@ -173,27 +319,81 @@ img {
 .lien-pdf {
     display: block;
     margin: 8px 0;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #cbd7e4;
+    border-radius: 10px;
     text-decoration: none;
+    color: var(--bleu);
+    background: #f8fbff;
+    overflow-wrap: anywhere;
 }
 
 #statutExport {
     margin-top: 10px;
-    font-weight: bold;
+    font-weight: 700;
+}
+
+.stockage {
+    box-shadow: none;
+    background: rgba(255,255,255,.65);
+}
+
+.stockage h2 {
+    font-size: 18px;
+}
+
+.stockage-ligne {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid #e5ebf2;
+    color: var(--secondaire);
+}
+
+.stockage-ligne strong {
+    color: var(--texte);
+    text-align: right;
+}
+
+.note {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--secondaire);
+}
+
+#ficheTicket {
+    display: none;
+    padding: 18px;
+}
+
+#ficheTicket h2 {
+    margin-top: 14px;
+}
+
+#fichePhoto {
+    display: block;
+    width: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    background: #f4f7fa;
+}
+
+#ficheTicket button[onclick="supprimerTicket()"] {
+    color: var(--danger);
+    background: #fff3f2;
+    border-color: #ffd1cc;
 }
 
 /* Fenêtre de recadrage */
 #cropModal {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.88);
+    background: rgba(8,18,31,.94);
     z-index: 9999;
     display: none;
     flex-direction: column;
-    padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom);
-    box-sizing: border-box;
+    padding: max(env(safe-area-inset-top), 10px) 12px max(env(safe-area-inset-bottom), 10px);
 }
 
 .crop-zone {
@@ -212,19 +412,47 @@ img {
 
 .crop-actions {
     background: white;
-    border-radius: 12px;
-    padding: 10px;
+    border-radius: 18px;
+    padding: 14px;
     margin: 10px 0;
     text-align: center;
+    box-shadow: 0 -6px 30px rgba(0,0,0,.18);
 }
 
-.note {
-    font-size: 13px;
-    color: #555;
+.crop-actions button {
+    width: 100%;
 }
 
-.stockage-ligne {
-    margin: 7px 0;
+.pdf-badge {
+    display: inline-block;
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: #fff1f0;
+    color: #9f2d20;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+@media (max-width: 520px) {
+    body {
+        padding-left: 13px;
+        padding-right: 13px;
+    }
+
+    h1 {
+        font-size: 27px;
+    }
+
+    .actions-ajout,
+    .categorie-buttons,
+    .actions-filtres {
+        grid-template-columns: 1fr;
+    }
+
+    .filtre-categories {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 </head>
@@ -257,12 +485,13 @@ img {
     <input
         id="importPhoto"
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf,.pdf"
         style="display:none"
     >
 
     <div id="photoZone" style="display:none">
         <h2>Aperçu</h2>
+        <div id="badgePdf" class="pdf-badge" style="display:none"></div>
         <img id="apercu">
 
         <h2>Informations</h2>
@@ -395,7 +624,7 @@ img {
         </div>
 
         <div class="stockage-ligne">
-            Photos enregistrées : <strong id="stockagePhotos">0 octet</strong>
+            Documents enregistrés : <strong id="stockagePhotos">0 octet</strong>
         </div>
 
         <div class="stockage-ligne">
@@ -420,8 +649,8 @@ img {
 
         <p class="note">
             Les valeurs « stockage web utilisé » et « quota » sont des estimations
-            fournies par le navigateur. « Photos enregistrées » correspond à la taille
-            réelle des images conservées par cette application.
+            fournies par le navigateur. « Documents enregistrés » correspond à la taille
+            réelle des images et pages PDF conservées par cette application.
         </p>
     </div>
 
@@ -503,6 +732,7 @@ img {
 <script>
 
 let photoChoisie = null;
+let pagesChoisies = null;
 let db = null;
 let ticketOuvert = null;
 let tousLesTickets = [];
@@ -514,6 +744,11 @@ let urlsPdf = [];
 let cropper = null;
 let fichierAvantRecadrage = null;
 let urlRecadrage = null;
+
+if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
 
 const categories = [
     {
@@ -733,9 +968,105 @@ document
             return;
         }
 
-        commencerRecadrage(fichier);
+        if (
+            fichier.type === "application/pdf"
+            ||
+            fichier.name.toLowerCase().endsWith(".pdf")
+        ) {
+            importerPdf(fichier);
+        } else {
+            commencerRecadrage(fichier);
+        }
     }
 );
+
+async function importerPdf(fichier) {
+
+    if (!window.pdfjsLib) {
+        alert("Le lecteur PDF n'a pas pu être chargé. Réessaie avec une connexion internet.");
+        return;
+    }
+
+    try {
+        const donnees = await fichier.arrayBuffer();
+        const documentPdf = await pdfjsLib.getDocument({ data: donnees }).promise;
+        const pages = [];
+
+        for (let numero = 1; numero <= documentPdf.numPages; numero++) {
+            const page = await documentPdf.getPage(numero);
+            const viewportOriginal = page.getViewport({ scale: 1 });
+
+            const dimensionMax = 2200;
+            const echelle = Math.min(
+                2,
+                dimensionMax / Math.max(viewportOriginal.width, viewportOriginal.height)
+            );
+
+            const viewport = page.getViewport({ scale: echelle });
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.ceil(viewport.width);
+            canvas.height = Math.ceil(viewport.height);
+
+            const contexte = canvas.getContext("2d", { alpha: false });
+            contexte.fillStyle = "#ffffff";
+            contexte.fillRect(0, 0, canvas.width, canvas.height);
+
+            await page.render({
+                canvasContext: contexte,
+                viewport: viewport
+            }).promise;
+
+            const blob = await new Promise(function(resolve) {
+                canvas.toBlob(resolve, "image/jpeg", 0.9);
+            });
+
+            if (!blob) {
+                throw new Error("Conversion d'une page PDF impossible.");
+            }
+
+            pages.push(
+                new File(
+                    [blob],
+                    "justificatif-page-" + numero + ".jpg",
+                    {
+                        type: "image/jpeg",
+                        lastModified: Date.now()
+                    }
+                )
+            );
+        }
+
+        if (pages.length === 0) {
+            throw new Error("PDF vide.");
+        }
+
+        pagesChoisies = pages;
+        photoChoisie = pages[0];
+
+        document.getElementById("apercu").src =
+            URL.createObjectURL(photoChoisie);
+
+        const badge = document.getElementById("badgePdf");
+        badge.style.display = "inline-block";
+        badge.textContent =
+            pages.length === 1
+            ? "PDF · 1 page"
+            : "PDF · " + pages.length + " pages";
+
+        document.getElementById("photoZone").style.display = "block";
+
+        window.scrollTo({
+            top: document.getElementById("photoZone").offsetTop - 15,
+            behavior: "smooth"
+        });
+
+    } catch (erreur) {
+        console.error(erreur);
+        alert("Impossible d'importer ce PDF.");
+        document.getElementById("importPhoto").value = "";
+    }
+}
+
 
 function commencerRecadrage(fichier) {
 
@@ -1010,7 +1341,12 @@ function fermerRecadrage() {
 
 function utiliserImageFinale(fichier) {
 
+    pagesChoisies = null;
     photoChoisie = fichier;
+
+    const badge = document.getElementById("badgePdf");
+    badge.style.display = "none";
+    badge.textContent = "";
 
     document.getElementById(
         "apercu"
@@ -1071,6 +1407,7 @@ function enregistrerTicket(categorie) {
 
     const ticket = {
         photo: photoChoisie,
+        pages: pagesChoisies ? pagesChoisies : undefined,
         categorie: categorie,
         nom: nom,
         date: date,
@@ -1371,6 +1708,11 @@ function afficherTickets(tickets) {
 
                         <p>
                             📝 ${ticket.nom}
+                            ${
+                                ticket.pages && ticket.pages.length > 1
+                                ? " · PDF " + ticket.pages.length + " pages"
+                                : ""
+                            }
                         </p>
                     `;
 
@@ -1607,6 +1949,11 @@ function fermerFiche() {
 function resetForm() {
 
     photoChoisie = null;
+    pagesChoisies = null;
+
+    const badge = document.getElementById("badgePdf");
+    badge.style.display = "none";
+    badge.textContent = "";
 
     document.getElementById(
         "prisePhoto"
@@ -1822,111 +2169,71 @@ async function creerPdfCategorie(
     tickets
 ) {
 
-    const {
-        jsPDF
-    } = window.jspdf;
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+        unit: "mm",
+        format: "a4"
+    });
 
-    const pdf =
-        new jsPDF({
-            unit: "mm",
-            format: "a4"
-        });
+    let premierePage = true;
 
-    for (
-        let i = 0;
-        i < tickets.length;
-        i++
-    ) {
+    for (const ticket of tickets) {
 
-        if (i > 0) {
-            pdf.addPage();
-        }
+        const pagesTicket =
+            ticket.pages && ticket.pages.length
+            ? ticket.pages
+            : [ticket.photo];
 
-        const dataUrl =
-            await fichierVersDataURL(
-                tickets[i].photo
-            );
+        for (const fichierPage of pagesTicket) {
 
-        const image =
-            await chargerImage(
-                dataUrl
-            );
+            if (!premierePage) {
+                pdf.addPage();
+            }
 
-        const largeurPage = 210;
-        const hauteurPage = 297;
-        const marge = 8;
+            premierePage = false;
 
-        const largeurMax =
-            largeurPage -
-            (marge * 2);
+            const dataUrl =
+                await fichierVersDataURL(fichierPage);
 
-        const hauteurMax =
-            hauteurPage -
-            (marge * 2);
+            const image =
+                await chargerImage(dataUrl);
 
-        const ratioImage =
-            image.width /
-            image.height;
+            const largeurPage = 210;
+            const hauteurPage = 297;
+            const marge = 8;
+            const largeurMax = largeurPage - (marge * 2);
+            const hauteurMax = hauteurPage - (marge * 2);
+            const ratioImage = image.width / image.height;
 
-        let largeur =
-            largeurMax;
+            let largeur = largeurMax;
+            let hauteur = largeur / ratioImage;
 
-        let hauteur =
-            largeur /
-            ratioImage;
+            if (hauteur > hauteurMax) {
+                hauteur = hauteurMax;
+                largeur = hauteur * ratioImage;
+            }
 
-        if (
-            hauteur >
-            hauteurMax
-        ) {
+            const x = (largeurPage - largeur) / 2;
+            const y = (hauteurPage - hauteur) / 2;
 
-            hauteur =
-                hauteurMax;
+            let formatImage = "JPEG";
 
-            largeur =
-                hauteur *
-                ratioImage;
-        }
+            if (dataUrl.startsWith("data:image/png")) {
+                formatImage = "PNG";
+            }
 
-        const x =
-            (
-                largeurPage -
-                largeur
-            )
-            / 2;
-
-        const y =
-            (
-                hauteurPage -
+            pdf.addImage(
+                dataUrl,
+                formatImage,
+                x,
+                y,
+                largeur,
                 hauteur
-            )
-            / 2;
-
-        let formatImage =
-            "JPEG";
-
-        if (
-            dataUrl.startsWith(
-                "data:image/png"
-            )
-        ) {
-            formatImage =
-                "PNG";
+            );
         }
-
-        pdf.addImage(
-            dataUrl,
-            formatImage,
-            x,
-            y,
-            largeur,
-            hauteur
-        );
     }
 
-    return pdf.output(
-        "blob"
-    );
+    return pdf.output("blob");
 }
 
 
@@ -2521,6 +2828,27 @@ async function actualiserStockage() {
     const taillePhotos =
         tousLesTickets.reduce(
             function(total, ticket) {
+
+                if (
+                    ticket.pages
+                    &&
+                    Array.isArray(ticket.pages)
+                    &&
+                    ticket.pages.length
+                ) {
+                    return total + ticket.pages.reduce(
+                        function(sousTotal, page) {
+                            return sousTotal +
+                                (
+                                    page &&
+                                    typeof page.size === "number"
+                                    ? page.size
+                                    : 0
+                                );
+                        },
+                        0
+                    );
+                }
 
                 const taille =
                     ticket.photo
