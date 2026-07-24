@@ -82,9 +82,9 @@ h3 {
 }
 
 .periode {
-    padding: 16px 18px;
+    padding: 18px;
     margin-bottom: 18px;
-    text-align: left;
+    text-align: center;
 }
 
 .periode strong {
@@ -93,13 +93,22 @@ h3 {
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: .5px;
-    margin-bottom: 6px;
+    margin-bottom: 10px;
 }
 
 #periodeActuelle {
+    display: block;
     font-size: 18px;
     font-weight: 700;
     color: var(--bleu);
+}
+
+#compteurPeriodeActuelle {
+    display: block;
+    margin-top: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--texte);
 }
 
 .actions-ajout {
@@ -564,8 +573,8 @@ details.stockage .note {
 
 <div class="periode">
     <strong>Période actuelle</strong>
-    <br><br>
     <span id="periodeActuelle"></span>
+    <span id="compteurPeriodeActuelle">0 🎟️</span>
 </div>
 
 <div id="ecranPrincipal">
@@ -1027,6 +1036,27 @@ function afficherPeriodeActuelle() {
         periode.debutAffichage +
         " → " +
         periode.finAffichage;
+}
+
+
+function actualiserCompteurPeriodeActuelle() {
+
+    const periode = calculerPeriode();
+
+    const total = tousLesTickets.filter(
+        function(ticket) {
+            return (
+                ticket.periodeDebut === periode.debutISO
+                &&
+                ticket.periodeFin === periode.finISO
+            );
+        }
+    ).length;
+
+    document.getElementById(
+        "compteurPeriodeActuelle"
+    ).textContent =
+        total + " 🎟️";
 }
 
 
@@ -1700,6 +1730,8 @@ function chargerTickets() {
 
             remplirPeriodesExport();
 
+            actualiserCompteurPeriodeActuelle();
+
             afficherTickets(
                 tousLesTickets
             );
@@ -2240,9 +2272,18 @@ function remplirPeriodesExport() {
                         debut:
                             ticket.periodeDebut,
                         fin:
-                            ticket.periodeFin
+                            ticket.periodeFin,
+                        total:
+                            1
                     }
                 );
+
+            } else {
+
+                periodes.get(
+                    cle
+                ).total++;
+
             }
         }
     );
@@ -2301,7 +2342,11 @@ function remplirPeriodesExport() {
                 +
                 formaterDateISO(
                     periode.fin
-                );
+                )
+                +
+                " — "
+                +
+                periode.total;
 
             select.appendChild(
                 option
