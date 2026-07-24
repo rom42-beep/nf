@@ -140,7 +140,8 @@ button:active {
 input,
 select {
     width: 100%;
-    max-width: none;
+    max-width: 100%;
+    min-width: 0;
     padding: 13px 14px;
     min-height: 48px;
     font-size: 16px;
@@ -149,6 +150,22 @@ select {
     border-radius: 11px;
     background: #fbfdff;
     color: var(--texte);
+}
+
+/* Sur iPhone, les champs date ont parfois une largeur intrinsèque trop grande. */
+#dateTicket,
+#nomTicket {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* Les dates du filtre restent volontairement plus compactes. */
+#filtreDateDebut,
+#filtreDateFin {
+    width: 210px;
+    max-width: 100%;
+    min-width: 0;
 }
 
 input:focus,
@@ -264,6 +281,82 @@ img {
 .stockage {
     margin-top: 20px;
     padding: 18px;
+}
+
+/* Blocs repliables pour garder l'écran plus léger. */
+details.filtres,
+details.stockage {
+    padding: 0;
+    overflow: hidden;
+}
+
+details.filtres > summary,
+details.stockage > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 18px;
+    font-size: 17px;
+    font-weight: 750;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--texte);
+}
+
+details.filtres > summary::-webkit-details-marker,
+details.stockage > summary::-webkit-details-marker {
+    display: none;
+}
+
+details.filtres > summary::after,
+details.stockage > summary::after {
+    content: "⌄";
+    color: var(--bleu);
+    font-size: 22px;
+    line-height: 1;
+    transition: transform .18s ease;
+}
+
+details.filtres[open] > summary::after,
+details.stockage[open] > summary::after {
+    transform: rotate(180deg);
+}
+
+.details-contenu {
+    padding: 0 18px 18px;
+    border-top: 1px solid #edf1f5;
+}
+
+details.stockage {
+    box-shadow: none;
+    background: rgba(255,255,255,.58);
+}
+
+details.stockage > summary {
+    padding-top: 13px;
+    padding-bottom: 13px;
+    font-size: 15px;
+    color: var(--secondaire);
+}
+
+details.stockage .details-contenu {
+    padding-bottom: 14px;
+}
+
+details.stockage .stockage-ligne {
+    font-size: 13px;
+    padding: 6px 0;
+}
+
+details.stockage button {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 13px;
+}
+
+details.stockage .note {
+    font-size: 11px;
+    margin-bottom: 0;
 }
 
 .filtres h3,
@@ -534,56 +627,55 @@ img {
     <h2>Mes justificatifs</h2>
     <div id="liste"></div>
 
-    <!-- FILTRES : placés entre Mes justificatifs et Extraire -->
-    <div class="filtres">
+    <!-- FILTRES : repliés par défaut pour garder l'interface épurée -->
+    <details class="filtres">
+        <summary>🔎 Filtres</summary>
 
-        <h3>🔎 Filtres</h3>
+        <div class="details-contenu">
 
-        <strong>Catégories</strong>
+            <p><strong>Catégories</strong></p>
 
-        <div class="filtre-categories">
-            <label>
-                <input type="checkbox" class="filtreCategorie" value="Restauration">
-                🍽️ Restauration
-            </label>
+            <div class="filtre-categories">
+                <label>
+                    <input type="checkbox" class="filtreCategorie" value="Restauration">
+                    🍽️ Restauration
+                </label>
 
-            <label>
-                <input type="checkbox" class="filtreCategorie" value="Hébergements">
-                🏨 Hébergements
-            </label>
+                <label>
+                    <input type="checkbox" class="filtreCategorie" value="Hébergements">
+                    🏨 Hébergements
+                </label>
 
-            <label>
-                <input type="checkbox" class="filtreCategorie" value="Transport - Péage">
-                🚗 Transport - Péage
-            </label>
+                <label>
+                    <input type="checkbox" class="filtreCategorie" value="Transport - Péage">
+                    🚗 Transport - Péage
+                </label>
 
-            <label>
-                <input type="checkbox" class="filtreCategorie" value="Divers - Carburant">
-                ⛽ Divers - Carburant
-            </label>
+                <label>
+                    <input type="checkbox" class="filtreCategorie" value="Divers - Carburant">
+                    ⛽ Divers - Carburant
+                </label>
+            </div>
+
+            <p><strong>Date ou intervalle</strong></p>
+
+            <label for="filtreDateDebut">Du :</label>
+            <br>
+            <input type="date" id="filtreDateDebut">
+
+            <br>
+
+            <label for="filtreDateFin">Au :</label>
+            <br>
+            <input type="date" id="filtreDateFin">
+
+            <div class="actions-filtres">
+                <button onclick="appliquerFiltres()">🔎 Appliquer</button>
+                <button onclick="reinitialiserFiltres()">↩️ Réinitialiser</button>
+            </div>
+
         </div>
-
-        <br>
-
-        <strong>Date ou intervalle</strong>
-
-        <br><br>
-
-        Du :
-        <br>
-        <input type="date" id="filtreDateDebut">
-
-        <br>
-
-        Au :
-        <br>
-        <input type="date" id="filtreDateFin">
-
-        <div class="actions-filtres">
-            <button onclick="appliquerFiltres()">🔎 Appliquer</button>
-            <button onclick="reinitialiserFiltres()">↩️ Réinitialiser</button>
-        </div>
-    </div>
+    </details>
 
     <div class="export">
 
@@ -616,43 +708,45 @@ img {
         </div>
     </div>
 
-    <div class="stockage">
-        <h2>💾 Stockage</h2>
+    <details class="stockage">
+        <summary>💾 Stockage</summary>
 
-        <div class="stockage-ligne">
-            Justificatifs : <strong id="stockageNb">0</strong>
+        <div class="details-contenu">
+
+            <div class="stockage-ligne">
+                Justificatifs : <strong id="stockageNb">0</strong>
+            </div>
+
+            <div class="stockage-ligne">
+                Documents : <strong id="stockagePhotos">0 octet</strong>
+            </div>
+
+            <div class="stockage-ligne">
+                Utilisé : <strong id="stockageUtilise">Indisponible</strong>
+            </div>
+
+            <div class="stockage-ligne">
+                Quota estimé : <strong id="stockageQuota">Indisponible</strong>
+            </div>
+
+            <div class="stockage-ligne">
+                Persistant : <strong id="stockagePersistant">Inconnu</strong>
+            </div>
+
+            <button onclick="actualiserStockage()">
+                🔄 Actualiser
+            </button>
+
+            <button onclick="demanderPersistance()">
+                🔒 Persistance
+            </button>
+
+            <p class="note">
+                Les valeurs de stockage et de quota sont des estimations du navigateur.
+            </p>
+
         </div>
-
-        <div class="stockage-ligne">
-            Documents enregistrés : <strong id="stockagePhotos">0 octet</strong>
-        </div>
-
-        <div class="stockage-ligne">
-            Stockage web utilisé : <strong id="stockageUtilise">Indisponible</strong>
-        </div>
-
-        <div class="stockage-ligne">
-            Quota estimé : <strong id="stockageQuota">Indisponible</strong>
-        </div>
-
-        <div class="stockage-ligne">
-            Stockage persistant : <strong id="stockagePersistant">Inconnu</strong>
-        </div>
-
-        <button onclick="actualiserStockage()">
-            🔄 Actualiser
-        </button>
-
-        <button onclick="demanderPersistance()">
-            🔒 Demander le stockage persistant
-        </button>
-
-        <p class="note">
-            Les valeurs « stockage web utilisé » et « quota » sont des estimations
-            fournies par le navigateur. « Documents enregistrés » correspond à la taille
-            réelle des images et pages PDF conservées par cette application.
-        </p>
-    </div>
+    </details>
 
 </div>
 
