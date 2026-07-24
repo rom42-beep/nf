@@ -1,18 +1,26 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Notes de frais</title>
 
 <script src="https://unpkg.com/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
 
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css"
+/>
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js">
+</script>
+
 <style>
+:root {
+    font-family: Arial, sans-serif;
+}
 
 body {
-    font-family: Arial, sans-serif;
     padding: 20px;
     max-width: 750px;
     margin: auto;
@@ -22,12 +30,31 @@ h1 {
     text-align: center;
 }
 
-.periode {
-    background: #f2f2f2;
+.periode,
+.filtres,
+.export,
+.stockage {
     padding: 15px;
     border-radius: 12px;
-    margin-bottom: 20px;
+    margin-top: 20px;
+}
+
+.periode {
+    background: #f2f2f2;
     text-align: center;
+}
+
+.filtres {
+    border: 1px solid #ccc;
+}
+
+.export {
+    border: 2px solid #aaa;
+}
+
+.stockage {
+    background: #f5f5f5;
+    border: 1px solid #ccc;
 }
 
 button {
@@ -42,8 +69,9 @@ input,
 select {
     padding: 10px;
     font-size: 16px;
-    margin: 5px 0 15px 0;
+    margin: 5px 0 15px;
     max-width: 420px;
+    box-sizing: border-box;
 }
 
 input[type="text"],
@@ -56,24 +84,17 @@ img {
     border-radius: 10px;
 }
 
+.actions-ajout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 20px;
+}
+
 .categorie-buttons {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-}
-
-
-/* FILTRES */
-
-.filtres {
-    margin-top: 25px;
-    padding: 15px;
-    border: 1px solid #ccc;
-    border-radius: 12px;
-}
-
-.filtres h3 {
-    margin-top: 0;
 }
 
 .filtre-categories label {
@@ -84,9 +105,6 @@ img {
 .actions-filtres {
     margin-top: 10px;
 }
-
-
-/* CATÉGORIES */
 
 .groupe-categorie {
     margin-top: 15px;
@@ -133,9 +151,6 @@ img {
     padding: 15px;
 }
 
-
-/* FICHE */
-
 #ficheTicket {
     display: none;
 }
@@ -143,16 +158,6 @@ img {
 #fichePhoto {
     max-height: 500px;
     object-fit: contain;
-}
-
-
-/* EXPORT */
-
-.export {
-    margin-top: 30px;
-    padding: 15px;
-    border: 2px solid #aaa;
-    border-radius: 12px;
 }
 
 .export select {
@@ -179,38 +184,67 @@ img {
     font-weight: bold;
 }
 
+/* Fenêtre de recadrage */
+#cropModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.88);
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom);
+    box-sizing: border-box;
+}
+
+.crop-zone {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#cropImage {
+    display: block;
+    max-width: 100%;
+    max-height: 70vh;
+}
+
+.crop-actions {
+    background: white;
+    border-radius: 12px;
+    padding: 10px;
+    margin: 10px 0;
+    text-align: center;
+}
+
+.note {
+    font-size: 13px;
+    color: #555;
+}
+
+.stockage-ligne {
+    margin: 7px 0;
+}
 </style>
 </head>
 
-
 <body>
-
 
 <h1>📒 Notes de frais</h1>
 
-
 <div class="periode">
-
     <strong>Période actuelle</strong>
-
     <br><br>
-
     <span id="periodeActuelle"></span>
-
 </div>
-
-
 
 <div id="ecranPrincipal">
 
-
-    <!-- AJOUT -->
-
-
-    <button onclick="ouvrirPhoto()">
-        📷 Ajouter un justificatif
-    </button>
-
+    <div class="actions-ajout">
+        <button onclick="ouvrirPhoto()">📷 Prendre une photo</button>
+        <button onclick="ouvrirImport()">📁 Importer</button>
+    </div>
 
     <input
         id="prisePhoto"
@@ -220,56 +254,36 @@ img {
         style="display:none"
     >
 
+    <input
+        id="importPhoto"
+        type="file"
+        accept="image/*"
+        style="display:none"
+    >
 
     <div id="photoZone" style="display:none">
-
         <h2>Aperçu</h2>
-
         <img id="apercu">
-
-        <br><br>
-
-        <button onclick="ouvrirPhoto()">
-            🔄 Reprendre
-        </button>
-
 
         <h2>Informations</h2>
 
-
-        <label>
-            Date du justificatif :
-        </label>
+        <label for="dateTicket">Date du justificatif :</label>
+        <br>
+        <input type="date" id="dateTicket">
 
         <br>
 
-        <input
-            type="date"
-            id="dateTicket"
-        >
-
-
+        <label for="nomTicket">Nom :</label>
         <br>
-
-
-        <label>
-            Nom :
-        </label>
-
-        <br>
-
         <input
             id="nomTicket"
             type="text"
             placeholder="Ex : Restaurant client"
         >
 
-
         <h3>Catégorie</h3>
 
-
         <div class="categorie-buttons">
-
             <button onclick="enregistrerTicket('Restauration')">
                 🍽️ Restauration
             </button>
@@ -285,263 +299,208 @@ img {
             <button onclick="enregistrerTicket('Divers - Carburant')">
                 ⛽ Divers - Carburant
             </button>
-
         </div>
-
     </div>
 
+    <h2>Mes justificatifs</h2>
+    <div id="liste"></div>
 
-
-    <!-- FILTRES -->
-
-
+    <!-- FILTRES : placés entre Mes justificatifs et Extraire -->
     <div class="filtres">
 
         <h3>🔎 Filtres</h3>
 
         <strong>Catégories</strong>
 
-
         <div class="filtre-categories">
-
             <label>
-                <input
-                    type="checkbox"
-                    class="filtreCategorie"
-                    value="Restauration"
-                >
+                <input type="checkbox" class="filtreCategorie" value="Restauration">
                 🍽️ Restauration
             </label>
 
             <label>
-                <input
-                    type="checkbox"
-                    class="filtreCategorie"
-                    value="Hébergements"
-                >
+                <input type="checkbox" class="filtreCategorie" value="Hébergements">
                 🏨 Hébergements
             </label>
 
             <label>
-                <input
-                    type="checkbox"
-                    class="filtreCategorie"
-                    value="Transport - Péage"
-                >
+                <input type="checkbox" class="filtreCategorie" value="Transport - Péage">
                 🚗 Transport - Péage
             </label>
 
             <label>
-                <input
-                    type="checkbox"
-                    class="filtreCategorie"
-                    value="Divers - Carburant"
-                >
+                <input type="checkbox" class="filtreCategorie" value="Divers - Carburant">
                 ⛽ Divers - Carburant
             </label>
-
         </div>
 
-
         <br>
-
 
         <strong>Date ou intervalle</strong>
 
-
         <br><br>
 
-
         Du :
+        <br>
+        <input type="date" id="filtreDateDebut">
 
         <br>
-
-        <input
-            type="date"
-            id="filtreDateDebut"
-        >
-
-
-        <br>
-
 
         Au :
-
         <br>
-
-        <input
-            type="date"
-            id="filtreDateFin"
-        >
-
+        <input type="date" id="filtreDateFin">
 
         <div class="actions-filtres">
-
-            <button onclick="appliquerFiltres()">
-                🔎 Appliquer
-            </button>
-
-            <button onclick="reinitialiserFiltres()">
-                ↩️ Réinitialiser
-            </button>
-
+            <button onclick="appliquerFiltres()">🔎 Appliquer</button>
+            <button onclick="reinitialiserFiltres()">↩️ Réinitialiser</button>
         </div>
-
     </div>
-
-
-
-    <!-- LISTE -->
-
-
-    <h2>Mes justificatifs</h2>
-
-    <div id="liste"></div>
-
-
-
-    <!-- EXPORT -->
-
 
     <div class="export">
 
         <h2>📄 Extraire</h2>
 
-
-        <label>
-            Période à extraire :
-        </label>
-
+        <label for="periodeExport">Période à extraire :</label>
         <br>
-
         <select id="periodeExport"></select>
 
-
         <br>
 
-
-        <button
-            id="boutonExtraire"
-            onclick="extrairePeriode()"
-        >
+        <button id="boutonExtraire" onclick="extrairePeriode()">
             📄 Extraire
         </button>
 
-
         <div id="statutExport"></div>
 
-
         <div id="zonePdf">
-
             <h3>PDF prêts</h3>
 
             <div id="liensPdf"></div>
-
 
             <button onclick="partagerPdfGeneres()">
                 ✉️ Partager / envoyer
             </button>
 
-
             <button onclick="nettoyerPeriodeExportee()">
                 🧹 Nettoyer cette période
             </button>
-
         </div>
-
     </div>
 
+    <div class="stockage">
+        <h2>💾 Stockage</h2>
+
+        <div class="stockage-ligne">
+            Justificatifs : <strong id="stockageNb">0</strong>
+        </div>
+
+        <div class="stockage-ligne">
+            Photos enregistrées : <strong id="stockagePhotos">0 octet</strong>
+        </div>
+
+        <div class="stockage-ligne">
+            Stockage web utilisé : <strong id="stockageUtilise">Indisponible</strong>
+        </div>
+
+        <div class="stockage-ligne">
+            Quota estimé : <strong id="stockageQuota">Indisponible</strong>
+        </div>
+
+        <div class="stockage-ligne">
+            Stockage persistant : <strong id="stockagePersistant">Inconnu</strong>
+        </div>
+
+        <button onclick="actualiserStockage()">
+            🔄 Actualiser
+        </button>
+
+        <button onclick="demanderPersistance()">
+            🔒 Demander le stockage persistant
+        </button>
+
+        <p class="note">
+            Les valeurs « stockage web utilisé » et « quota » sont des estimations
+            fournies par le navigateur. « Photos enregistrées » correspond à la taille
+            réelle des images conservées par cette application.
+        </p>
+    </div>
 
 </div>
 
 
-
 <!-- FICHE TICKET -->
-
-
 <div id="ficheTicket">
 
-
-    <button onclick="fermerFiche()">
-        ← Retour
-    </button>
-
+    <button onclick="fermerFiche()">← Retour</button>
 
     <h2>Justificatif</h2>
 
-
     <img id="fichePhoto">
-
 
     <br><br>
 
-
-    <label>Date :</label>
+    <label for="ficheDate">Date :</label>
+    <br>
+    <input type="date" id="ficheDate">
 
     <br>
 
-    <input
-        type="date"
-        id="ficheDate"
-    >
-
-
+    <label for="ficheNom">Nom :</label>
     <br>
-
-
-    <label>Nom :</label>
-
-    <br>
-
-    <input
-        id="ficheNom"
-        type="text"
-    >
-
+    <input id="ficheNom" type="text">
 
     <h3>Catégorie</h3>
 
-
     <select id="ficheCategorie">
-
-        <option value="Restauration">
-            Restauration
-        </option>
-
-        <option value="Hébergements">
-            Hébergements
-        </option>
-
-        <option value="Transport - Péage">
-            Transport - Péage
-        </option>
-
-        <option value="Divers - Carburant">
-            Divers - Carburant
-        </option>
-
+        <option value="Restauration">Restauration</option>
+        <option value="Hébergements">Hébergements</option>
+        <option value="Transport - Péage">Transport - Péage</option>
+        <option value="Divers - Carburant">Divers - Carburant</option>
     </select>
 
-
     <br><br>
-
 
     <button onclick="sauvegarderModification()">
         💾 Enregistrer les modifications
     </button>
 
-
     <button onclick="supprimerTicket()">
         🗑️ Supprimer
     </button>
+</div>
 
+
+<!-- RECadrage -->
+<div id="cropModal">
+
+    <div class="crop-zone">
+        <img id="cropImage" alt="Image à recadrer">
+    </div>
+
+    <div class="crop-actions">
+        <strong>Rogner le justificatif</strong>
+
+        <p class="note">
+            Déplace et redimensionne le cadre avec les doigts.
+        </p>
+
+        <button onclick="validerRecadrage()">
+            ✂️ Utiliser ce cadrage
+        </button>
+
+        <button onclick="garderImageEntiere()">
+            🖼️ Garder l’image entière
+        </button>
+
+        <button onclick="annulerRecadrage()">
+            Annuler
+        </button>
+    </div>
 
 </div>
 
 
-
 <script>
-
 
 let photoChoisie = null;
 let db = null;
@@ -552,227 +511,149 @@ let fichiersPdfGeneres = [];
 let periodeDernierExport = null;
 let urlsPdf = [];
 
+let cropper = null;
+let fichierAvantRecadrage = null;
+let urlRecadrage = null;
 
 const categories = [
-
     {
         nom: "Restauration",
         icone: "🍽️",
         fichier: "Restauration"
     },
-
     {
         nom: "Hébergements",
         icone: "🏨",
         fichier: "Hebergements"
     },
-
     {
         nom: "Transport - Péage",
         icone: "🚗",
         fichier: "Transport-Peage"
     },
-
     {
         nom: "Divers - Carburant",
         icone: "⛽",
         fichier: "Divers-Carburant"
     }
-
 ];
-
 
 
 /* ========================================= */
 /* INDEXED DB */
 /* ========================================= */
 
+const requete = indexedDB.open("NotesDeFrais", 1);
 
-const requete =
-    indexedDB.open(
-        "NotesDeFrais",
-        1
-    );
+requete.onupgradeneeded = function(event) {
 
+    db = event.target.result;
 
-requete.onupgradeneeded =
-    function(event) {
-
-        db =
-            event.target.result;
-
-        if (
-            !db.objectStoreNames.contains(
-                "tickets"
-            )
-        ) {
-
-            db.createObjectStore(
-                "tickets",
-                {
-                    keyPath: "id",
-                    autoIncrement: true
-                }
-            );
-
-        }
-
-    };
-
-
-requete.onsuccess =
-    function(event) {
-
-        db =
-            event.target.result;
-
-        afficherPeriodeActuelle();
-
-        chargerTickets();
-
-    };
-
-
-requete.onerror =
-    function() {
-
-        alert(
-            "Impossible d'ouvrir la base de données."
+    if (!db.objectStoreNames.contains("tickets")) {
+        db.createObjectStore(
+            "tickets",
+            {
+                keyPath: "id",
+                autoIncrement: true
+            }
         );
+    }
+};
 
-    };
+requete.onsuccess = function(event) {
 
+    db = event.target.result;
+
+    afficherPeriodeActuelle();
+    chargerTickets();
+};
+
+requete.onerror = function() {
+    alert("Impossible d'ouvrir la base de données.");
+};
 
 
 /* ========================================= */
 /* PÉRIODES */
 /* ========================================= */
 
-
 function calculerPeriode(dateTexte) {
 
     let date;
 
-
     if (dateTexte) {
 
-        const morceaux =
-            dateTexte.split("-");
+        const morceaux = dateTexte.split("-");
 
-        date =
-            new Date(
-                Number(morceaux[0]),
-                Number(morceaux[1]) - 1,
-                Number(morceaux[2])
-            );
+        date = new Date(
+            Number(morceaux[0]),
+            Number(morceaux[1]) - 1,
+            Number(morceaux[2])
+        );
 
-    }
-
-    else {
+    } else {
 
         date = new Date();
-
     }
 
-
-    const annee =
-        date.getFullYear();
-
-    const mois =
-        date.getMonth();
-
-    const jour =
-        date.getDate();
-
+    const annee = date.getFullYear();
+    const mois = date.getMonth();
+    const jour = date.getDate();
 
     let debut;
     let fin;
 
-
     if (jour >= 20) {
 
-        debut =
-            new Date(
-                annee,
-                mois,
-                20
-            );
+        debut = new Date(
+            annee,
+            mois,
+            20
+        );
 
-        fin =
-            new Date(
-                annee,
-                mois + 1,
-                20
-            );
+        fin = new Date(
+            annee,
+            mois + 1,
+            20
+        );
 
+    } else {
+
+        debut = new Date(
+            annee,
+            mois - 1,
+            20
+        );
+
+        fin = new Date(
+            annee,
+            mois,
+            20
+        );
     }
-
-    else {
-
-        debut =
-            new Date(
-                annee,
-                mois - 1,
-                20
-            );
-
-        fin =
-            new Date(
-                annee,
-                mois,
-                20
-            );
-
-    }
-
 
     return {
-
-        debutISO:
-            dateVersISO(debut),
-
-        finISO:
-            dateVersISO(fin),
-
-        debutAffichage:
-            formaterDate(debut),
-
-        finAffichage:
-            formaterDate(fin)
-
+        debutISO: dateVersISO(debut),
+        finISO: dateVersISO(fin),
+        debutAffichage: formaterDate(debut),
+        finAffichage: formaterDate(fin)
     };
-
 }
-
-
 
 function dateVersISO(date) {
 
-    const annee =
-        date.getFullYear();
+    const annee = date.getFullYear();
 
-    const mois =
-        String(
-            date.getMonth() + 1
-        ).padStart(
-            2,
-            "0"
-        );
+    const mois = String(
+        date.getMonth() + 1
+    ).padStart(2, "0");
 
-    const jour =
-        String(
-            date.getDate()
-        ).padStart(
-            2,
-            "0"
-        );
-
+    const jour = String(
+        date.getDate()
+    ).padStart(2, "0");
 
     return `${annee}-${mois}-${jour}`;
-
 }
-
-
 
 function formaterDate(date) {
 
@@ -784,131 +665,356 @@ function formaterDate(date) {
             year: "numeric"
         }
     );
-
 }
-
-
 
 function formaterDateISO(dateISO) {
 
-    const morceaux =
-        dateISO.split("-");
+    const morceaux = dateISO.split("-");
 
-    const date =
-        new Date(
-            Number(morceaux[0]),
-            Number(morceaux[1]) - 1,
-            Number(morceaux[2])
-        );
+    const date = new Date(
+        Number(morceaux[0]),
+        Number(morceaux[1]) - 1,
+        Number(morceaux[2])
+    );
 
     return formaterDate(date);
-
 }
-
-
 
 function afficherPeriodeActuelle() {
 
-    const periode =
-        calculerPeriode();
+    const periode = calculerPeriode();
 
     document.getElementById(
         "periodeActuelle"
     ).textContent =
-
         periode.debutAffichage +
         " → " +
         periode.finAffichage;
-
 }
 
 
-
 /* ========================================= */
-/* PHOTO */
+/* PHOTO + IMPORT */
 /* ========================================= */
-
 
 function ouvrirPhoto() {
-
-    document.getElementById(
-        "prisePhoto"
-    ).click();
-
+    document.getElementById("prisePhoto").click();
 }
 
-
+function ouvrirImport() {
+    document.getElementById("importPhoto").click();
+}
 
 document
-.getElementById(
-    "prisePhoto"
-)
+.getElementById("prisePhoto")
 .addEventListener(
     "change",
-
     function() {
 
-        photoChoisie =
-            this.files[0];
+        const fichier = this.files && this.files[0];
 
-        if (!photoChoisie) {
+        if (!fichier) {
             return;
         }
 
-        document.getElementById(
-            "apercu"
-        ).src =
-
-            URL.createObjectURL(
-                photoChoisie
-            );
-
-        document.getElementById(
-            "photoZone"
-        ).style.display =
-            "block";
-
+        commencerRecadrage(fichier);
     }
 );
 
+document
+.getElementById("importPhoto")
+.addEventListener(
+    "change",
+    function() {
+
+        const fichier = this.files && this.files[0];
+
+        if (!fichier) {
+            return;
+        }
+
+        commencerRecadrage(fichier);
+    }
+);
+
+function commencerRecadrage(fichier) {
+
+    if (!fichier.type.startsWith("image/")) {
+
+        alert("Pour le moment, l'import accepte uniquement les images.");
+
+        return;
+    }
+
+    fichierAvantRecadrage = fichier;
+
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
+
+    if (urlRecadrage) {
+        URL.revokeObjectURL(urlRecadrage);
+    }
+
+    urlRecadrage = URL.createObjectURL(fichier);
+
+    const image = document.getElementById("cropImage");
+
+    image.src = urlRecadrage;
+
+    document.getElementById(
+        "cropModal"
+    ).style.display = "flex";
+
+    image.onload = function() {
+
+        cropper = new Cropper(
+            image,
+            {
+                viewMode: 1,
+                dragMode: "move",
+                autoCropArea: 0.9,
+                responsive: true,
+                background: false,
+                movable: true,
+                zoomable: true,
+                scalable: false,
+                rotatable: true,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false
+            }
+        );
+    };
+}
+
+function validerRecadrage() {
+
+    if (!cropper) {
+        return;
+    }
+
+    const canvas = cropper.getCroppedCanvas({
+        maxWidth: 2400,
+        maxHeight: 3200,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: "high"
+    });
+
+    if (!canvas) {
+
+        alert("Impossible de recadrer cette image.");
+
+        return;
+    }
+
+    canvas.toBlob(
+        function(blob) {
+
+            if (!blob) {
+
+                alert("Impossible de créer l'image recadrée.");
+
+                return;
+            }
+
+            const fichier = new File(
+                [blob],
+                "justificatif.jpg",
+                {
+                    type: "image/jpeg",
+                    lastModified: Date.now()
+                }
+            );
+
+            utiliserImageFinale(fichier);
+            fermerRecadrage();
+        },
+        "image/jpeg",
+        0.9
+    );
+}
+
+async function garderImageEntiere() {
+
+    if (!fichierAvantRecadrage) {
+        return;
+    }
+
+    /*
+    On repasse tout de même l'image par un canvas.
+    Cela convertit notamment les formats iPhone
+    compatibles avec Safari vers un JPEG standard
+    utilisable facilement dans les PDF.
+    */
+    try {
+
+        const dataUrl = await fichierVersDataURL(
+            fichierAvantRecadrage
+        );
+
+        const image = await chargerImage(dataUrl);
+
+        const dimensionMax = 3200;
+
+        let largeur = image.width;
+        let hauteur = image.height;
+
+        const ratio = Math.min(
+            1,
+            dimensionMax / Math.max(
+                largeur,
+                hauteur
+            )
+        );
+
+        largeur = Math.round(
+            largeur * ratio
+        );
+
+        hauteur = Math.round(
+            hauteur * ratio
+        );
+
+        const canvas = document.createElement(
+            "canvas"
+        );
+
+        canvas.width = largeur;
+        canvas.height = hauteur;
+
+        const contexte = canvas.getContext(
+            "2d"
+        );
+
+        contexte.drawImage(
+            image,
+            0,
+            0,
+            largeur,
+            hauteur
+        );
+
+        canvas.toBlob(
+            function(blob) {
+
+                if (!blob) {
+                    return;
+                }
+
+                const fichier = new File(
+                    [blob],
+                    "justificatif.jpg",
+                    {
+                        type: "image/jpeg",
+                        lastModified: Date.now()
+                    }
+                );
+
+                utiliserImageFinale(fichier);
+                fermerRecadrage();
+            },
+            "image/jpeg",
+            0.9
+        );
+
+    } catch (erreur) {
+
+        console.error(erreur);
+
+        /*
+        En secours, on garde le fichier original.
+        */
+        utiliserImageFinale(
+            fichierAvantRecadrage
+        );
+
+        fermerRecadrage();
+    }
+}
+
+function annulerRecadrage() {
+
+    fermerRecadrage();
+
+    document.getElementById(
+        "prisePhoto"
+    ).value = "";
+
+    document.getElementById(
+        "importPhoto"
+    ).value = "";
+}
+
+function fermerRecadrage() {
+
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
+
+    if (urlRecadrage) {
+        URL.revokeObjectURL(
+            urlRecadrage
+        );
+        urlRecadrage = null;
+    }
+
+    fichierAvantRecadrage = null;
+
+    document.getElementById(
+        "cropModal"
+    ).style.display = "none";
+}
+
+function utiliserImageFinale(fichier) {
+
+    photoChoisie = fichier;
+
+    document.getElementById(
+        "apercu"
+    ).src =
+        URL.createObjectURL(
+            photoChoisie
+        );
+
+    document.getElementById(
+        "photoZone"
+    ).style.display = "block";
+
+    window.scrollTo({
+        top: document.getElementById(
+            "photoZone"
+        ).offsetTop - 15,
+        behavior: "smooth"
+    });
+}
 
 
 /* ========================================= */
 /* ENREGISTRER */
 /* ========================================= */
 
-
 function enregistrerTicket(categorie) {
 
     if (!photoChoisie) {
 
-        alert(
-            "Aucune photo sélectionnée."
-        );
+        alert("Aucune photo sélectionnée.");
 
         return;
-
     }
 
-
     const nom =
-
         document
-        .getElementById(
-            "nomTicket"
-        )
+        .getElementById("nomTicket")
         .value
         .trim();
 
-
     const date =
-
         document
-        .getElementById(
-            "dateTicket"
-        )
+        .getElementById("dateTicket")
         .value;
-
 
     if (!nom || !date) {
 
@@ -917,108 +1023,82 @@ function enregistrerTicket(categorie) {
         );
 
         return;
-
     }
 
-
-    const periode =
-        calculerPeriode(date);
-
+    const periode = calculerPeriode(
+        date
+    );
 
     const ticket = {
-
-        photo:
-            photoChoisie,
-
-        categorie:
-            categorie,
-
-        nom:
-            nom,
-
-        date:
-            date,
-
-        periodeDebut:
-            periode.debutISO,
-
-        periodeFin:
-            periode.finISO
-
+        photo: photoChoisie,
+        categorie: categorie,
+        nom: nom,
+        date: date,
+        periodeDebut: periode.debutISO,
+        periodeFin: periode.finISO
     };
 
-
     const transaction =
-
         db.transaction(
             ["tickets"],
             "readwrite"
         );
 
-
     transaction
-    .objectStore(
-        "tickets"
-    )
-    .add(
-        ticket
-    );
-
+    .objectStore("tickets")
+    .add(ticket);
 
     transaction.oncomplete =
         function() {
 
             resetForm();
-
             chargerTickets();
-
         };
 
-}
+    transaction.onerror =
+        function() {
 
+            alert(
+                "Erreur pendant l'enregistrement du justificatif."
+            );
+        };
+}
 
 
 /* ========================================= */
 /* CHARGER */
 /* ========================================= */
 
-
 function chargerTickets() {
 
-    const transaction =
+    if (!db) {
+        return;
+    }
 
+    const transaction =
         db.transaction(
             ["tickets"],
             "readonly"
         );
 
-
     const demande =
-
         transaction
-        .objectStore(
-            "tickets"
-        )
+        .objectStore("tickets")
         .getAll();
-
 
     demande.onsuccess =
         function() {
 
             tousLesTickets =
-                demande.result;
-
+                demande.result || [];
 
             tousLesTickets.sort(
                 function(a, b) {
-
                     return b.date.localeCompare(
                         a.date
                     );
-
                 }
             );
-
 
             remplirPeriodesExport();
 
@@ -1026,21 +1106,18 @@ function chargerTickets() {
                 tousLesTickets
             );
 
+            actualiserStockage();
         };
-
 }
-
 
 
 /* ========================================= */
 /* FILTRES */
 /* ========================================= */
 
-
 function appliquerFiltres() {
 
     const categoriesChoisies =
-
         Array.from(
             document.querySelectorAll(
                 ".filtreCategorie:checked"
@@ -1048,32 +1125,23 @@ function appliquerFiltres() {
         )
         .map(
             function(element) {
-
                 return element.value;
-
             }
         );
 
-
     const dateDebut =
-
         document.getElementById(
             "filtreDateDebut"
         ).value;
 
-
     const dateFin =
-
         document.getElementById(
             "filtreDateFin"
         ).value;
 
-
     const resultat =
-
         tousLesTickets.filter(
             function(ticket) {
-
 
                 if (
                     categoriesChoisies.length > 0
@@ -1082,47 +1150,33 @@ function appliquerFiltres() {
                         ticket.categorie
                     )
                 ) {
-
                     return false;
-
                 }
-
 
                 if (
                     dateDebut
                     &&
                     ticket.date < dateDebut
                 ) {
-
                     return false;
-
                 }
-
 
                 if (
                     dateFin
                     &&
                     ticket.date > dateFin
                 ) {
-
                     return false;
-
                 }
 
-
                 return true;
-
             }
         );
-
 
     afficherTickets(
         resultat
     );
-
 }
-
-
 
 function reinitialiserFiltres() {
 
@@ -1132,38 +1186,27 @@ function reinitialiserFiltres() {
     )
     .forEach(
         function(element) {
-
-            element.checked =
-                false;
-
+            element.checked = false;
         }
     );
 
-
     document.getElementById(
         "filtreDateDebut"
-    ).value =
-        "";
-
+    ).value = "";
 
     document.getElementById(
         "filtreDateFin"
-    ).value =
-        "";
-
+    ).value = "";
 
     afficherTickets(
         tousLesTickets
     );
-
 }
-
 
 
 /* ========================================= */
 /* AFFICHAGE PAR CATÉGORIE */
 /* ========================================= */
-
 
 function afficherTickets(tickets) {
 
@@ -1172,238 +1215,170 @@ function afficherTickets(tickets) {
             "liste"
         );
 
+    liste.innerHTML = "";
 
-    liste.innerHTML =
-        "";
-
-
-    if (
-        tickets.length === 0
-    ) {
+    if (tickets.length === 0) {
 
         liste.innerHTML =
-
             `<p class="message-vide">
                 Aucun justificatif correspondant.
             </p>`;
 
         return;
-
     }
-
 
     categories.forEach(
         function(categorie) {
 
-
             const ticketsCategorie =
-
                 tickets.filter(
                     function(ticket) {
-
                         return (
                             ticket.categorie ===
                             categorie.nom
                         );
-
                     }
                 );
 
-
             if (
-                ticketsCategorie.length === 0
+                ticketsCategorie.length ===
+                0
             ) {
-
                 return;
-
             }
 
-
             const groupe =
-
                 document.createElement(
                     "div"
                 );
-
 
             groupe.className =
                 "groupe-categorie";
 
-
             const entete =
-
                 document.createElement(
                     "div"
                 );
-
 
             entete.className =
                 "entete-categorie";
 
-
             entete.innerHTML = `
-
                 <span>
-
                     ${categorie.icone}
                     ${categorie.nom}
-
                 </span>
 
                 <span class="compteur">
-
-                    ${ticketsCategorie.length}
-                    ▼
-
+                    ${ticketsCategorie.length} ▼
                 </span>
-
             `;
 
-
             const contenu =
-
                 document.createElement(
                     "div"
                 );
 
-
             contenu.className =
                 "contenu-categorie";
-
 
             entete.onclick =
                 function() {
 
-
                     const ouvert =
-
                         contenu.style.display ===
                         "block";
 
-
                     contenu.style.display =
-
                         ouvert
                         ? "none"
                         : "block";
-
 
                     entete
                     .querySelector(
                         ".compteur"
                     )
                     .textContent =
-
                         ticketsCategorie.length +
                         (ouvert ? " ▼" : " ▲");
-
                 };
-
 
             ticketsCategorie.forEach(
                 function(ticket) {
 
-
                     const urlPhoto =
-
                         URL.createObjectURL(
                             ticket.photo
                         );
 
-
                     const bloc =
-
                         document.createElement(
                             "div"
                         );
 
-
                     bloc.className =
                         "ticket";
 
-
                     bloc.innerHTML = `
-
                         <img
                             src="${urlPhoto}"
                             alt="Justificatif"
                         >
 
                         <p>
-                            📅
-                            ${formaterDateISO(ticket.date)}
+                            📅 ${formaterDateISO(ticket.date)}
                         </p>
 
                         <p>
-                            📝
-                            ${ticket.nom}
+                            📝 ${ticket.nom}
                         </p>
-
                     `;
-
 
                     bloc.onclick =
                         function() {
-
                             ouvrirFiche(
                                 ticket.id
                             );
-
                         };
-
 
                     contenu.appendChild(
                         bloc
                     );
-
                 }
             );
-
 
             groupe.appendChild(
                 entete
             );
 
-
             groupe.appendChild(
                 contenu
             );
 
-
             liste.appendChild(
                 groupe
             );
-
         }
     );
-
 }
-
 
 
 /* ========================================= */
 /* FICHE */
 /* ========================================= */
 
-
 function ouvrirFiche(id) {
 
     const transaction =
-
         db.transaction(
             ["tickets"],
             "readonly"
         );
 
-
     const demande =
-
         transaction
-        .objectStore(
-            "tickets"
-        )
+        .objectStore("tickets")
         .get(id);
-
 
     demande.onsuccess =
         function() {
@@ -1411,60 +1386,48 @@ function ouvrirFiche(id) {
             ticketOuvert =
                 demande.result;
 
-
             if (!ticketOuvert) {
                 return;
             }
 
-
             document.getElementById(
                 "fichePhoto"
             ).src =
-
                 URL.createObjectURL(
                     ticketOuvert.photo
                 );
-
 
             document.getElementById(
                 "ficheDate"
             ).value =
                 ticketOuvert.date;
 
-
             document.getElementById(
                 "ficheNom"
             ).value =
                 ticketOuvert.nom;
-
 
             document.getElementById(
                 "ficheCategorie"
             ).value =
                 ticketOuvert.categorie;
 
-
             document.getElementById(
                 "ecranPrincipal"
             ).style.display =
                 "none";
 
-
             document.getElementById(
                 "ficheTicket"
             ).style.display =
                 "block";
-
         };
-
 }
-
 
 
 /* ========================================= */
 /* MODIFIER */
 /* ========================================= */
-
 
 function sauvegarderModification() {
 
@@ -1472,27 +1435,20 @@ function sauvegarderModification() {
         return;
     }
 
-
     const nouvelleDate =
-
         document.getElementById(
             "ficheDate"
         ).value;
 
-
     const nouveauNom =
-
         document.getElementById(
             "ficheNom"
         ).value.trim();
 
-
     const nouvelleCategorie =
-
         document.getElementById(
             "ficheCategorie"
         ).value;
-
 
     if (
         !nouvelleDate ||
@@ -1504,71 +1460,50 @@ function sauvegarderModification() {
         );
 
         return;
-
     }
 
-
     const periode =
-
         calculerPeriode(
             nouvelleDate
         );
 
-
     ticketOuvert.date =
         nouvelleDate;
-
 
     ticketOuvert.nom =
         nouveauNom;
 
-
     ticketOuvert.categorie =
         nouvelleCategorie;
-
 
     ticketOuvert.periodeDebut =
         periode.debutISO;
 
-
     ticketOuvert.periodeFin =
         periode.finISO;
 
-
     const transaction =
-
         db.transaction(
             ["tickets"],
             "readwrite"
         );
 
-
     transaction
-    .objectStore(
-        "tickets"
-    )
-    .put(
-        ticketOuvert
-    );
-
+    .objectStore("tickets")
+    .put(ticketOuvert);
 
     transaction.oncomplete =
         function() {
 
             fermerFiche();
-
             chargerTickets();
-
         };
-
 }
-
 
 
 /* ========================================= */
 /* SUPPRIMER */
 /* ========================================= */
-
 
 function supprimerTicket() {
 
@@ -1576,105 +1511,78 @@ function supprimerTicket() {
         return;
     }
 
-
     if (
         !confirm(
             "Supprimer définitivement ce justificatif ?"
         )
     ) {
-
         return;
-
     }
 
-
     const transaction =
-
         db.transaction(
             ["tickets"],
             "readwrite"
         );
 
-
     transaction
-    .objectStore(
-        "tickets"
-    )
-    .delete(
-        ticketOuvert.id
-    );
-
+    .objectStore("tickets")
+    .delete(ticketOuvert.id);
 
     transaction.oncomplete =
         function() {
 
-            ticketOuvert =
-                null;
+            ticketOuvert = null;
 
             fermerFiche();
-
             chargerTickets();
-
         };
-
 }
-
 
 
 /* ========================================= */
 /* RETOUR */
 /* ========================================= */
 
-
 function fermerFiche() {
 
-    ticketOuvert =
-        null;
-
+    ticketOuvert = null;
 
     document.getElementById(
         "ficheTicket"
     ).style.display =
         "none";
 
-
     document.getElementById(
         "ecranPrincipal"
     ).style.display =
         "block";
-
 }
-
 
 
 /* ========================================= */
 /* RESET FORMULAIRE */
 /* ========================================= */
 
-
 function resetForm() {
 
-    photoChoisie =
-        null;
-
+    photoChoisie = null;
 
     document.getElementById(
         "prisePhoto"
-    ).value =
-        "";
+    ).value = "";
 
+    document.getElementById(
+        "importPhoto"
+    ).value = "";
 
     document.getElementById(
         "nomTicket"
-    ).value =
-        "";
-
+    ).value = "";
 
     document.getElementById(
         "dateTicket"
-    ).value =
-        "";
-
+    ).value = "";
 
     document.getElementById(
         "apercu"
@@ -1682,20 +1590,16 @@ function resetForm() {
         "src"
     );
 
-
     document.getElementById(
         "photoZone"
     ).style.display =
         "none";
-
 }
-
 
 
 /* ========================================= */
 /* PÉRIODES DISPONIBLES POUR EXPORT */
 /* ========================================= */
-
 
 function remplirPeriodesExport() {
 
@@ -1704,140 +1608,98 @@ function remplirPeriodesExport() {
             "periodeExport"
         );
 
-
     const ancienneValeur =
         select.value;
 
-
-    select.innerHTML =
-        "";
-
+    select.innerHTML = "";
 
     const periodes =
         new Map();
 
-
     tousLesTickets.forEach(
         function(ticket) {
 
-
             const cle =
-
                 ticket.periodeDebut +
                 "|" +
                 ticket.periodeFin;
 
-
-            if (
-                !periodes.has(
-                    cle
-                )
-            ) {
+            if (!periodes.has(cle)) {
 
                 periodes.set(
                     cle,
                     {
                         debut:
                             ticket.periodeDebut,
-
                         fin:
                             ticket.periodeFin
                     }
                 );
-
             }
-
         }
     );
-
 
     const tableau =
         Array.from(
             periodes.values()
         );
 
-
     tableau.sort(
         function(a, b) {
-
             return b.debut.localeCompare(
                 a.debut
             );
-
         }
     );
 
-
-    if (
-        tableau.length === 0
-    ) {
+    if (tableau.length === 0) {
 
         const option =
             document.createElement(
                 "option"
             );
 
-
-        option.value =
-            "";
-
+        option.value = "";
 
         option.textContent =
             "Aucune période disponible";
-
 
         select.appendChild(
             option
         );
 
-
         return;
-
     }
-
 
     tableau.forEach(
         function(periode) {
 
-
             const option =
-
                 document.createElement(
                     "option"
                 );
 
-
             option.value =
-
                 periode.debut +
                 "|" +
                 periode.fin;
 
-
             option.textContent =
-
                 formaterDateISO(
                     periode.debut
                 )
-
                 +
-
                 " → "
-
                 +
-
                 formaterDateISO(
                     periode.fin
                 );
 
-
             select.appendChild(
                 option
             );
-
         }
     );
-
 
     if (
         ancienneValeur
@@ -1851,94 +1713,69 @@ function remplirPeriodesExport() {
                 ancienneValeur
         )
     ) {
-
         select.value =
             ancienneValeur;
-
     }
-
 }
-
 
 
 /* ========================================= */
 /* CONVERTIR PHOTO POUR PDF */
 /* ========================================= */
 
-
 function fichierVersDataURL(fichier) {
 
     return new Promise(
         function(resolve, reject) {
 
-
             const lecteur =
                 new FileReader();
 
-
             lecteur.onload =
                 function() {
-
                     resolve(
                         lecteur.result
                     );
-
                 };
-
 
             lecteur.onerror =
                 reject;
 
-
             lecteur.readAsDataURL(
                 fichier
             );
-
         }
     );
-
 }
-
-
 
 function chargerImage(dataUrl) {
 
     return new Promise(
         function(resolve, reject) {
 
-
             const image =
                 new Image();
 
-
             image.onload =
                 function() {
-
                     resolve(
                         image
                     );
-
                 };
-
 
             image.onerror =
                 reject;
 
-
             image.src =
                 dataUrl;
-
         }
     );
-
 }
-
 
 
 /* ========================================= */
 /* CRÉATION D'UN PDF */
 /* ========================================= */
-
 
 async function creerPdfCategorie(
     categorie,
@@ -1947,9 +1784,7 @@ async function creerPdfCategorie(
 
     const {
         jsPDF
-    } =
-        window.jspdf;
-
+    } = window.jspdf;
 
     const pdf =
         new jsPDF({
@@ -1957,72 +1792,48 @@ async function creerPdfCategorie(
             format: "a4"
         });
 
-
     for (
         let i = 0;
         i < tickets.length;
         i++
     ) {
 
-
         if (i > 0) {
-
             pdf.addPage();
-
         }
 
-
         const dataUrl =
-
             await fichierVersDataURL(
                 tickets[i].photo
             );
 
-
         const image =
-
             await chargerImage(
                 dataUrl
             );
 
-
-        const largeurPage =
-            210;
-
-
-        const hauteurPage =
-            297;
-
-
-        const marge =
-            8;
-
+        const largeurPage = 210;
+        const hauteurPage = 297;
+        const marge = 8;
 
         const largeurMax =
             largeurPage -
             (marge * 2);
 
-
         const hauteurMax =
             hauteurPage -
             (marge * 2);
 
-
         const ratioImage =
-
             image.width /
             image.height;
-
 
         let largeur =
             largeurMax;
 
-
         let hauteur =
-
             largeur /
             ratioImage;
-
 
         if (
             hauteur >
@@ -2032,48 +1843,36 @@ async function creerPdfCategorie(
             hauteur =
                 hauteurMax;
 
-
             largeur =
-
                 hauteur *
                 ratioImage;
-
         }
 
-
         const x =
-
             (
                 largeurPage -
                 largeur
             )
             / 2;
 
-
         const y =
-
             (
                 hauteurPage -
                 hauteur
             )
             / 2;
 
-
         let formatImage =
             "JPEG";
-
 
         if (
             dataUrl.startsWith(
                 "data:image/png"
             )
         ) {
-
             formatImage =
                 "PNG";
-
         }
-
 
         pdf.addImage(
             dataUrl,
@@ -2083,22 +1882,17 @@ async function creerPdfCategorie(
             largeur,
             hauteur
         );
-
     }
-
 
     return pdf.output(
         "blob"
     );
-
 }
-
 
 
 /* ========================================= */
 /* EXTRACTION */
 /* ========================================= */
-
 
 async function extrairePeriode() {
 
@@ -2112,16 +1906,12 @@ async function extrairePeriode() {
         );
 
         return;
-
     }
 
-
     const valeur =
-
         document.getElementById(
             "periodeExport"
         ).value;
-
 
     if (!valeur) {
 
@@ -2130,9 +1920,7 @@ async function extrairePeriode() {
         );
 
         return;
-
     }
-
 
     const [
         debut,
@@ -2140,27 +1928,19 @@ async function extrairePeriode() {
     ] =
         valeur.split("|");
 
-
     const ticketsPeriode =
-
         tousLesTickets.filter(
             function(ticket) {
 
                 return (
-
                     ticket.periodeDebut ===
                     debut
-
                     &&
-
                     ticket.periodeFin ===
                     fin
-
                 );
-
             }
         );
-
 
     if (
         ticketsPeriode.length ===
@@ -2172,41 +1952,29 @@ async function extrairePeriode() {
         );
 
         return;
-
     }
-
 
     document.getElementById(
         "statutExport"
     ).textContent =
-
         "Création des PDF...";
-
 
     document.getElementById(
         "zonePdf"
     ).style.display =
         "none";
 
-
-    fichiersPdfGeneres =
-        [];
-
+    fichiersPdfGeneres = [];
 
     urlsPdf.forEach(
         function(url) {
-
             URL.revokeObjectURL(
                 url
             );
-
         }
     );
 
-
-    urlsPdf =
-        [];
-
+    urlsPdf = [];
 
     periodeDernierExport =
         {
@@ -2214,80 +1982,51 @@ async function extrairePeriode() {
             fin: fin
         };
 
-
     try {
-
 
         for (
             const categorie of
             categories
         ) {
 
-
             const ticketsCategorie =
-
                 ticketsPeriode
                 .filter(
                     function(ticket) {
 
                         return (
-
                             ticket.categorie ===
                             categorie.nom
-
                         );
-
                     }
                 )
                 .sort(
                     function(a, b) {
-
                         return a.date.localeCompare(
                             b.date
                         );
-
                     }
                 );
 
-
-            /*
-            On crée quand même
-            un PDF pour chacune des
-            4 catégories.
-
-            Si la catégorie est vide,
-            le PDF contient une page
-            blanche.
-            */
-
-
             let blob;
-
 
             if (
                 ticketsCategorie.length >
                 0
             ) {
 
-
                 blob =
-
                     await creerPdfCategorie(
                         categorie,
                         ticketsCategorie
                     );
 
-
-            }
-
-            else {
-
+            } else {
 
                 const {
                     jsPDF
                 } =
                     window.jspdf;
-
 
                 const pdfVide =
                     new jsPDF({
@@ -2295,17 +2034,13 @@ async function extrairePeriode() {
                         format: "a4"
                     });
 
-
                 blob =
                     pdfVide.output(
                         "blob"
                     );
-
             }
 
-
             const nomFichier =
-
                 categorie.fichier +
                 "_" +
                 debut +
@@ -2313,9 +2048,7 @@ async function extrairePeriode() {
                 fin +
                 ".pdf";
 
-
             const fichier =
-
                 new File(
                     [blob],
                     nomFichier,
@@ -2325,160 +2058,116 @@ async function extrairePeriode() {
                     }
                 );
 
-
             fichiersPdfGeneres.push(
                 fichier
             );
-
         }
 
-
         afficherPdfGeneres();
-
 
         document.getElementById(
             "statutExport"
         ).textContent =
-
             "✅ Les 4 PDF sont prêts.";
-
-
-        /*
-        On essaie automatiquement
-        d'ouvrir le partage natif.
-        */
-
 
         await essayerPartageAutomatique();
 
-
-    }
-
-    catch (erreur) {
-
+    } catch (erreur) {
 
         console.error(
             erreur
         );
 
-
         document.getElementById(
             "statutExport"
         ).textContent =
-
             "❌ Erreur pendant la création des PDF.";
-
 
         alert(
             "Une erreur est survenue pendant la création des PDF."
         );
-
     }
-
 }
-
 
 
 /* ========================================= */
 /* LIENS PDF */
 /* ========================================= */
 
-
 function afficherPdfGeneres() {
 
     const zone =
-
         document.getElementById(
             "zonePdf"
         );
 
-
     const liens =
-
         document.getElementById(
             "liensPdf"
         );
 
+    liens.innerHTML = "";
 
-    liens.innerHTML =
-        "";
+    urlsPdf.forEach(
+        function(url) {
+            URL.revokeObjectURL(
+                url
+            );
+        }
+    );
 
-
-    urlsPdf =
-        [];
-
+    urlsPdf = [];
 
     fichiersPdfGeneres.forEach(
         function(fichier) {
 
-
             const url =
-
                 URL.createObjectURL(
                     fichier
                 );
-
 
             urlsPdf.push(
                 url
             );
 
-
             const lien =
-
                 document.createElement(
                     "a"
                 );
 
-
             lien.href =
                 url;
-
 
             lien.download =
                 fichier.name;
 
-
             lien.className =
                 "lien-pdf";
 
-
             lien.textContent =
-
                 "📄 " +
                 fichier.name;
-
 
             liens.appendChild(
                 lien
             );
-
         }
     );
 
-
     zone.style.display =
         "block";
-
 }
-
 
 
 /* ========================================= */
 /* PARTAGE */
 /* ========================================= */
 
-
 async function essayerPartageAutomatique() {
 
-    if (
-        !navigator.share
-    ) {
-
+    if (!navigator.share) {
         return;
-
     }
-
 
     if (
         navigator.canShare
@@ -2488,20 +2177,14 @@ async function essayerPartageAutomatique() {
                 fichiersPdfGeneres
         })
     ) {
-
         return;
-
     }
-
 
     try {
 
-
         await navigator.share({
-
             title:
                 "Notes de frais",
-
             text:
                 "Notes de frais " +
                 formaterDateISO(
@@ -2513,38 +2196,20 @@ async function essayerPartageAutomatique() {
                 formaterDateISO(
                     periodeDernierExport.fin
                 ),
-
             files:
                 fichiersPdfGeneres
-
         });
-
 
         proposerNettoyage();
 
-
-    }
-
-    catch (erreur) {
-
-
-        /*
-        L'utilisateur peut simplement
-        fermer le menu de partage.
-        Ce n'est pas une erreur grave.
-        */
-
+    } catch (erreur) {
 
         console.log(
             "Partage annulé ou indisponible.",
             erreur
         );
-
     }
-
 }
-
-
 
 async function partagerPdfGeneres() {
 
@@ -2558,22 +2223,16 @@ async function partagerPdfGeneres() {
         );
 
         return;
-
     }
 
-
-    if (
-        !navigator.share
-    ) {
+    if (!navigator.share) {
 
         alert(
             "Le partage direct n'est pas disponible ici. Utilise les liens PDF affichés."
         );
 
         return;
-
     }
-
 
     if (
         navigator.canShare
@@ -2589,117 +2248,81 @@ async function partagerPdfGeneres() {
         );
 
         return;
-
     }
-
 
     try {
 
-
         await navigator.share({
-
             title:
                 "Notes de frais",
-
             text:
                 "Notes de frais",
-
             files:
                 fichiersPdfGeneres
-
         });
-
 
         proposerNettoyage();
 
-
-    }
-
-    catch (erreur) {
-
+    } catch (erreur) {
 
         console.log(
             erreur
         );
-
     }
-
 }
-
 
 
 /* ========================================= */
 /* PROPOSITION NETTOYAGE */
 /* ========================================= */
 
-
 function proposerNettoyage() {
 
     setTimeout(
         function() {
 
-
             const choix =
-
                 confirm(
                     "Les PDF ont été partagés.\n\nSupprimer les justificatifs de cette période de l'application ?"
                 );
 
-
             if (choix) {
-
                 nettoyerPeriodeExportee();
-
             }
-
         },
         300
     );
-
 }
-
 
 
 /* ========================================= */
 /* NETTOYER PÉRIODE */
 /* ========================================= */
 
-
 function nettoyerPeriodeExportee() {
 
-    if (
-        !periodeDernierExport
-    ) {
+    if (!periodeDernierExport) {
 
         alert(
             "Aucune période n'a encore été extraite."
         );
 
         return;
-
     }
 
-
     const ticketsASupprimer =
-
         tousLesTickets.filter(
             function(ticket) {
 
                 return (
-
                     ticket.periodeDebut ===
                     periodeDernierExport.debut
-
                     &&
-
                     ticket.periodeFin ===
                     periodeDernierExport.fin
-
                 );
-
             }
         );
-
 
     if (
         ticketsASupprimer.length ===
@@ -2711,14 +2334,10 @@ function nettoyerPeriodeExportee() {
         );
 
         return;
-
     }
 
-
     const confirmation =
-
         confirm(
-
             "Supprimer définitivement les "
             +
             ticketsASupprimer.length
@@ -2736,93 +2355,268 @@ function nettoyerPeriodeExportee() {
             )
             +
             " ?"
-
         );
 
-
     if (!confirmation) {
-
         return;
-
     }
 
-
     const transaction =
-
         db.transaction(
             ["tickets"],
             "readwrite"
         );
 
-
     const stockage =
-
         transaction.objectStore(
             "tickets"
         );
 
-
     ticketsASupprimer.forEach(
         function(ticket) {
-
             stockage.delete(
                 ticket.id
             );
-
         }
     );
-
 
     transaction.oncomplete =
         function() {
 
-
-            fichiersPdfGeneres =
-                [];
-
-
-            periodeDernierExport =
-                null;
-
+            fichiersPdfGeneres = [];
+            periodeDernierExport = null;
 
             urlsPdf.forEach(
                 function(url) {
-
                     URL.revokeObjectURL(
                         url
                     );
-
                 }
             );
 
-
-            urlsPdf =
-                [];
-
+            urlsPdf = [];
 
             document.getElementById(
                 "zonePdf"
             ).style.display =
                 "none";
 
-
             document.getElementById(
                 "statutExport"
             ).textContent =
-
                 "✅ Période nettoyée.";
 
-
             chargerTickets();
-
         };
-
 }
 
 
+/* ========================================= */
+/* STOCKAGE */
+/* ========================================= */
+
+function formaterOctets(octets) {
+
+    if (
+        octets === undefined
+        ||
+        octets === null
+        ||
+        Number.isNaN(octets)
+    ) {
+        return "Indisponible";
+    }
+
+    if (octets < 1024) {
+        return octets + " octets";
+    }
+
+    const unites = [
+        "Ko",
+        "Mo",
+        "Go",
+        "To"
+    ];
+
+    let valeur =
+        octets / 1024;
+
+    let index =
+        0;
+
+    while (
+        valeur >= 1024
+        &&
+        index <
+        unites.length - 1
+    ) {
+
+        valeur =
+            valeur / 1024;
+
+        index++;
+    }
+
+    return (
+        valeur.toLocaleString(
+            "fr-FR",
+            {
+                maximumFractionDigits: 1
+            }
+        )
+        +
+        " "
+        +
+        unites[index]
+    );
+}
+
+async function actualiserStockage() {
+
+    document.getElementById(
+        "stockageNb"
+    ).textContent =
+        tousLesTickets.length;
+
+    const taillePhotos =
+        tousLesTickets.reduce(
+            function(total, ticket) {
+
+                const taille =
+                    ticket.photo
+                    &&
+                    typeof ticket.photo.size ===
+                    "number"
+                    ? ticket.photo.size
+                    : 0;
+
+                return total + taille;
+            },
+            0
+        );
+
+    document.getElementById(
+        "stockagePhotos"
+    ).textContent =
+        formaterOctets(
+            taillePhotos
+        );
+
+    if (
+        navigator.storage
+        &&
+        navigator.storage.estimate
+    ) {
+
+        try {
+
+            const estimation =
+                await navigator.storage.estimate();
+
+            document.getElementById(
+                "stockageUtilise"
+            ).textContent =
+                formaterOctets(
+                    estimation.usage
+                );
+
+            document.getElementById(
+                "stockageQuota"
+            ).textContent =
+                formaterOctets(
+                    estimation.quota
+                );
+
+        } catch (erreur) {
+
+            console.log(
+                "Estimation du stockage indisponible.",
+                erreur
+            );
+        }
+    }
+
+    if (
+        navigator.storage
+        &&
+        navigator.storage.persisted
+    ) {
+
+        try {
+
+            const persistant =
+                await navigator.storage.persisted();
+
+            document.getElementById(
+                "stockagePersistant"
+            ).textContent =
+                persistant
+                ? "Oui"
+                : "Non";
+        } catch (erreur) {
+
+            document.getElementById(
+                "stockagePersistant"
+            ).textContent =
+                "Indisponible";
+        }
+    } else {
+
+        document.getElementById(
+            "stockagePersistant"
+        ).textContent =
+            "Non pris en charge";
+    }
+}
+
+async function demanderPersistance() {
+
+    if (
+        !navigator.storage
+        ||
+        !navigator.storage.persist
+    ) {
+
+        alert(
+            "La demande de stockage persistant n'est pas prise en charge sur cet appareil."
+        );
+
+        return;
+    }
+
+    try {
+
+        const accord =
+            await navigator.storage.persist();
+
+        await actualiserStockage();
+
+        if (accord) {
+
+            alert(
+                "Le navigateur indique que le stockage est persistant."
+            );
+
+        } else {
+
+            alert(
+                "Le navigateur n'a pas accordé le stockage persistant. L'application continuera quand même à fonctionner normalement."
+            );
+        }
+
+    } catch (erreur) {
+
+        console.error(
+            erreur
+        );
+
+        alert(
+            "Impossible de demander le stockage persistant."
+        );
+    }
+}
+
 </script>
 
-
 </body>
-
 </html>
