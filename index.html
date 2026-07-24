@@ -773,14 +773,19 @@ function commencerRecadrage(fichier) {
             image,
             {
                 viewMode: 1,
-                dragMode: "move",
-                autoCropArea: 0.9,
+                dragMode: "none",
+                autoCropArea: 0.85,
                 responsive: true,
+                restore: false,
+                checkOrientation: true,
                 background: false,
-                movable: true,
-                zoomable: true,
+                guides: true,
+                center: true,
+                highlight: true,
+                movable: false,
+                zoomable: false,
                 scalable: false,
-                rotatable: true,
+                rotatable: false,
                 cropBoxMovable: true,
                 cropBoxResizable: true,
                 toggleDragModeOnDblclick: false
@@ -795,11 +800,46 @@ function validerRecadrage() {
         return;
     }
 
+    /*
+    On récupère d'abord les dimensions exactes du cadre
+    dans les coordonnées de l'image d'origine. Cela évite
+    que le redimensionnement maximal agrandisse visuellement
+    la zone autour du cadre sur certains iPhone.
+    */
+    const donneesRecadrage = cropper.getData(true);
+
+    const largeurRecadree = Math.max(
+        1,
+        Math.round(donneesRecadrage.width)
+    );
+
+    const hauteurRecadree = Math.max(
+        1,
+        Math.round(donneesRecadrage.height)
+    );
+
+    const facteurReduction = Math.min(
+        1,
+        2400 / largeurRecadree,
+        3200 / hauteurRecadree
+    );
+
+    const largeurSortie = Math.max(
+        1,
+        Math.round(largeurRecadree * facteurReduction)
+    );
+
+    const hauteurSortie = Math.max(
+        1,
+        Math.round(hauteurRecadree * facteurReduction)
+    );
+
     const canvas = cropper.getCroppedCanvas({
-        maxWidth: 2400,
-        maxHeight: 3200,
+        width: largeurSortie,
+        height: hauteurSortie,
         imageSmoothingEnabled: true,
-        imageSmoothingQuality: "high"
+        imageSmoothingQuality: "high",
+        fillColor: "#fff"
     });
 
     if (!canvas) {
