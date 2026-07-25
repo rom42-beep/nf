@@ -1,4 +1,4 @@
-const CACHE_NAME = "notes-de-frais-v1";
+const CACHE_NAME = "notes-de-frais-v2";
 
 const ASSETS = [
     "./",
@@ -9,7 +9,7 @@ const ASSETS = [
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css",
     "https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js",
-    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
 ];
 
 self.addEventListener("install", function(event) {
@@ -55,27 +55,28 @@ self.addEventListener("fetch", function(event) {
 
     const request = event.request;
 
+    // Always prefer the network for page navigation so GitHub updates appear quickly.
     if (request.mode === "navigate") {
         event.respondWith(
             fetch(request)
             .then(function(response) {
-                const copie = response.clone();
-
-                caches.open(CACHE_NAME)
-                .then(function(cache) {
-                    cache.put("./index.html", copie);
+                const copy = response.clone();
+                caches.open(CACHE_NAME).then(function(cache) {
+                    cache.put("./index.html", copy);
                 });
-
                 return response;
             })
             .catch(function() {
-                return caches.match("./index.html");
+                return caches.match("./index.html")
+                    .then(function(cached) {
+                        return cached || caches.match("./");
+                    });
             })
         );
-
         return;
     }
 
+    // Static libraries: cache first, network fallback.
     event.respondWith(
         caches.match(request)
         .then(function(cached) {
@@ -86,22 +87,14 @@ self.addEventListener("fetch", function(event) {
             return fetch(request)
             .then(function(response) {
                 if (
-                    response
-                    &&
-                    (
-                        response.ok
-                        ||
-                        response.type === "opaque"
-                    )
+                    response &&
+                    (response.ok || response.type === "opaque")
                 ) {
-                    const copie = response.clone();
-
-                    caches.open(CACHE_NAME)
-                    .then(function(cache) {
-                        cache.put(request, copie);
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then(function(cache) {
+                        cache.put(request, copy);
                     });
                 }
-
                 return response;
             });
         })
