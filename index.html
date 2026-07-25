@@ -611,29 +611,82 @@ details.stockage .note {
     color: white;
 }
 
-#statutCloud {
-    margin: 10px 0 14px;
-    padding: 10px 12px;
-    border-radius: 11px;
-    background: #f7f9fc;
-    color: var(--secondaire);
-    font-size: 13px;
-    font-weight: 650;
+.entete-app {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 8px 2px 18px;
 }
 
-#statutCloud.ok {
-    background: #eef9f1;
+.entete-app h1 {
+    margin: 0;
+    min-width: 0;
+}
+
+.statut-cloud-discret {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 750;
+    white-space: nowrap;
+    color: var(--secondaire);
+}
+
+.statut-cloud-discret.ok {
     color: #26733a;
 }
 
-#statutCloud.attente {
-    background: #fff8e8;
-    color: #8a6200;
+.statut-cloud-discret.erreur {
+    color: var(--danger);
 }
 
-#statutCloud.erreur {
-    background: #fff3f2;
-    color: var(--danger);
+.popup-cloud {
+    position: fixed;
+    left: 50%;
+    bottom: max(24px, calc(env(safe-area-inset-bottom) + 14px));
+    transform: translate(-50%, 18px);
+    z-index: 10050;
+    max-width: calc(100vw - 32px);
+    padding: 11px 15px;
+    border-radius: 999px;
+    background: #172033;
+    color: white;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .22);
+    font-size: 14px;
+    font-weight: 750;
+    text-align: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease, visibility .18s ease;
+}
+
+.popup-cloud.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+}
+
+.popup-cloud.succes {
+    background: #26733a;
+}
+
+.popup-cloud.erreur {
+    background: var(--danger);
+}
+
+@media (max-width: 380px) {
+    .entete-app {
+        gap: 8px;
+    }
+
+    .entete-app h1 {
+        font-size: 24px;
+    }
+
+    .statut-cloud-discret {
+        font-size: 11px;
+    }
 }
 
 /* État de sauvegarde cloud affiché sur chaque justificatif */
@@ -674,7 +727,10 @@ details.stockage .note {
 
 <body>
 
-<h1>📒 Notes de frais</h1>
+<div class="entete-app">
+    <h1>📒 Notes de frais</h1>
+    <div id="statutCloud" class="statut-cloud-discret">● Vérification…</div>
+</div>
 
 <div class="periode">
     <strong>Période actuelle</strong>
@@ -700,8 +756,6 @@ details.stockage .note {
 </div>
 
 <div id="ecranPrincipal" style="display:none">
-
-    <div id="statutCloud">☁️ Vérification de la connexion au cloud…</div>
 
     <div class="actions-ajout">
         <button onclick="ouvrirPhoto()">📷 Prendre une photo</button>
@@ -892,6 +946,8 @@ details.stockage .note {
 </div>
 
 
+<div id="popupCloud" class="popup-cloud" role="status" aria-live="polite"></div>
+
 <!-- FICHE TICKET -->
 <div id="ficheTicket">
 
@@ -1024,14 +1080,58 @@ function definirStatutCloud(texte, classe) {
 function afficherEtatConnexionCloud(ok, texte) {
     if (ok) {
         definirStatutCloud(
-            texte || "☁️ Cloud connecté",
-            "ok"
+            texte || "● Connecté",
+            "statut-cloud-discret ok"
         );
     } else {
         definirStatutCloud(
-            texte || "☁️ Cloud inaccessible",
-            "erreur"
+            texte || "● Déconnecté",
+            "statut-cloud-discret erreur"
         );
+    }
+}
+
+let minuteriePopupCloud = null;
+
+function afficherPopupCloud(texte, type, duree) {
+    const popup = document.getElementById("popupCloud");
+
+    if (!popup) {
+        return;
+    }
+
+    if (minuteriePopupCloud) {
+        clearTimeout(minuteriePopupCloud);
+        minuteriePopupCloud = null;
+    }
+
+    popup.textContent = texte;
+    popup.className =
+        "popup-cloud visible" +
+        (type ? " " + type : "");
+
+    if (duree && duree > 0) {
+        minuteriePopupCloud = setTimeout(
+            function() {
+                masquerPopupCloud();
+            },
+            duree
+        );
+    }
+}
+
+function masquerPopupCloud() {
+    const popup = document.getElementById("popupCloud");
+
+    if (!popup) {
+        return;
+    }
+
+    popup.classList.remove("visible");
+
+    if (minuteriePopupCloud) {
+        clearTimeout(minuteriePopupCloud);
+        minuteriePopupCloud = null;
     }
 }
 
@@ -1103,7 +1203,7 @@ async function seConnecter() {
     utilisateurCloud = data.user;
     document.getElementById("authPassword").value = "";
     afficherApplication();
-    afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
+    afficherEtatConnexionCloud(true, "● Connecté");
     await chargerTickets();
 }
 
@@ -1137,7 +1237,7 @@ async function initialiserCloud() {
 
         utilisateurCloud = session.user;
         afficherApplication();
-        afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
+        afficherEtatConnexionCloud(true, "● Connecté");
         await chargerTickets();
 
     } catch (erreur) {
@@ -1148,9 +1248,13 @@ async function initialiserCloud() {
     }
 }
 
+window.addEventListener("offline", function() {
+    afficherEtatConnexionCloud(false, "● Déconnecté");
+});
+
 window.addEventListener("online", async function() {
     if (utilisateurCloud && db) {
-        afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
+        afficherEtatConnexionCloud(true, "● Connecté");
         await chargerTickets();
     }
 });
@@ -2388,10 +2492,17 @@ async function envoyerTicketLocalVersCloud(ticket) {
         }
 
         await supprimerTicketLocalParId(ticket.id);
+        afficherPopupCloud("✓ Envoyé", "succes", 1400);
 
         return true;
 
     } catch (erreur) {
+        afficherPopupCloud(
+            "✕ Échec de l’envoi",
+            "erreur",
+            4000
+        );
+
         console.error("Envoi cloud :", erreur);
 
         if (cheminsCrees.length) {
@@ -2421,12 +2532,7 @@ async function synchroniserTicketsLocaux() {
         return;
     }
 
-    definirStatutCloud(
-        "☁️ Envoi de "
-        + ticketsLocaux.length
-        + " justificatif(s)…",
-        "attente"
-    );
+    afficherPopupCloud("Envoi en cours…", "", 0);
 
     for (const ticket of ticketsLocaux) {
         try {
@@ -2647,12 +2753,9 @@ async function enregistrerTicket(categorie) {
             &&
             navigator.onLine
         ) {
-            afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
+            afficherEtatConnexionCloud(true, "● Connecté");
         } else {
-            afficherEtatConnexionCloud(
-                false,
-                "☁️ Hors ligne — envoi automatique au retour du réseau"
-            );
+            afficherEtatConnexionCloud(false, "● Déconnecté");
         }
 
         await chargerTickets();
@@ -2711,26 +2814,20 @@ async function chargerTickets() {
                 tousLesTickets =
                     cloudTickets.concat(locaux);
 
-                afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
+                afficherEtatConnexionCloud(true, "● Connecté");
 
             } catch (erreur) {
                 console.error("Chargement cloud :", erreur);
 
                 tousLesTickets = locaux;
 
-                afficherEtatConnexionCloud(
-                    false,
-                    "☁️ Cloud inaccessible — les justificatifs restent sur l’iPhone"
-                );
+                afficherEtatConnexionCloud(false, "● Déconnecté");
             }
 
         } else {
             tousLesTickets = locaux;
 
-            afficherEtatConnexionCloud(
-                false,
-                "☁️ Hors ligne — envoi automatique au retour du réseau"
-            );
+            afficherEtatConnexionCloud(false, "● Déconnecté");
         }
 
         tousLesTickets.sort(
