@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-<link rel="icon" type="imag/png" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" href="./apple-touch-icon.png">
   
 <title>Notes de frais</title>
 
@@ -588,6 +588,52 @@ details.stockage .note {
     appearance: none;
     inline-size: 100%;
 }
+
+/* Connexion et état du cloud */
+#authPanel {
+    background: var(--carte);
+    border: 1px solid var(--bordure);
+    border-radius: 18px;
+    box-shadow: var(--ombre);
+    padding: 18px;
+    margin-bottom: 18px;
+}
+
+#authPanel h2 {
+    margin-top: 0;
+}
+
+#authPanel button {
+    width: 100%;
+    background: var(--bleu);
+    color: white;
+}
+
+#statutCloud {
+    margin: 10px 0 14px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    background: #f7f9fc;
+    color: var(--secondaire);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+#statutCloud.ok {
+    background: #eef9f1;
+    color: #26733a;
+}
+
+#statutCloud.attente {
+    background: #fff8e8;
+    color: #8a6200;
+}
+
+#statutCloud.erreur {
+    background: #fff3f2;
+    color: var(--danger);
+}
+
 </style>
 </head>
 
@@ -601,7 +647,26 @@ details.stockage .note {
     <span id="compteurPeriodeActuelle">0 🎟️</span>
 </div>
 
-<div id="ecranPrincipal">
+<div id="authPanel" style="display:none">
+    <h2>☁️ Connexion</h2>
+    <p class="note">
+        Connecte-toi une fois avec le compte Supabase créé pour cette application.
+        La session sera ensuite conservée sur l’iPhone tant qu’iOS ne l’efface pas.
+    </p>
+
+    <label for="authEmail">E-mail :</label>
+    <input id="authEmail" type="email" autocomplete="username" inputmode="email">
+
+    <label for="authPassword">Mot de passe :</label>
+    <input id="authPassword" type="password" autocomplete="current-password">
+
+    <button onclick="seConnecter()">Se connecter</button>
+    <div id="authMessage" class="note"></div>
+</div>
+
+<div id="ecranPrincipal" style="display:none">
+
+    <div id="statutCloud">☁️ Initialisation…</div>
 
     <div class="actions-ajout">
         <button onclick="ouvrirPhoto()">📷 Prendre une photo</button>
@@ -759,7 +824,7 @@ details.stockage .note {
             </div>
 
             <div class="stockage-ligne">
-                Documents : <strong id="stockagePhotos">0 octet</strong>
+                Cache local : <strong id="stockagePhotos">0 octet</strong>
             </div>
 
             <div class="stockage-ligne">
@@ -783,7 +848,7 @@ details.stockage .note {
             </button>
 
             <p class="note">
-                Les valeurs de stockage et de quota sont des estimations du navigateur.
+                Le cache local sert uniquement aux justificatifs en attente. Les documents sauvegardés sont conservés dans le cloud privé.
             </p>
 
         </div>
@@ -878,7 +943,162 @@ let urlsPdf = [];
 
 let cropper = null;
 let fichierAvantRecadrage = null;
+
 let urlRecadrage = null;
+
+/* ========================================= */
+/* SUPABASE / CLOUD */
+/* ========================================= */
+
+const SUPABASE_URL =
+    "https://nsgidqbydctnpktrkkgr.supabase.co";
+
+const SUPABASE_PUBLISHABLE_KEY =
+    "sb_publishable_T4Eg6hiQwZaqBTkbJ8FRDw_rFRevkIQ";
+
+const cloud =
+    window.supabase
+    ? window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        }
+    )
+    : null;
+
+let utilisateurCloud = null;
+let chargementEnCours = false;
+let urlsApercusCloud = [];
+
+function definirStatutCloud(texte, classe) {
+    const zone = document.getElementById("statutCloud");
+
+    if (!zone) {
+        return;
+    }
+
+    zone.textContent = texte;
+    zone.className = classe || "";
+}
+
+function afficherConnexion(message) {
+    document.getElementById("authPanel").style.display = "block";
+    document.getElementById("ecranPrincipal").style.display = "none";
+
+    if (message) {
+        document.getElementById("authMessage").textContent = message;
+    }
+}
+
+function afficherApplication() {
+    document.getElementById("authPanel").style.display = "none";
+    document.getElementById("ecranPrincipal").style.display = "block";
+}
+
+async function seConnecter() {
+    if (!cloud) {
+        document.getElementById("authMessage").textContent =
+            "La bibliothèque Supabase n'a pas pu être chargée.";
+        return;
+    }
+
+    const email =
+        document.getElementById("authEmail").value.trim();
+
+    const password =
+        document.getElementById("authPassword").value;
+
+    if (!email || !password) {
+        document.getElementById("authMessage").textContent =
+            "Renseigne l'e-mail et le mot de passe.";
+        return;
+    }
+
+    document.getElementById("authMessage").textContent =
+        "Connexion…";
+
+    const { data, error } =
+        await cloud.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
+
+    if (error) {
+        console.error(error);
+        document.getElementById("authMessage").textContent =
+            "Connexion impossible. Vérifie l'e-mail et le mot de passe.";
+        return;
+    }
+
+    utilisateurCloud = data.user;
+    document.getElementById("authPassword").value = "";
+    afficherApplication();
+    definirStatutCloud("☁️ Connexion établie. Synchronisation…");
+    await chargerTickets();
+}
+
+async function initialiserCloud() {
+    afficherPeriodeActuelle();
+
+    if (!cloud) {
+        afficherConnexion(
+            "Supabase n'a pas pu être chargé. Vérifie la connexion internet."
+        );
+        return;
+    }
+
+    try {
+        const { data, error } =
+            await cloud.auth.getSession();
+
+        if (error) {
+            throw error;
+        }
+
+        const session =
+            data && data.session
+            ? data.session
+            : null;
+
+        if (!session || !session.user) {
+            afficherConnexion();
+            return;
+        }
+
+        utilisateurCloud = session.user;
+        afficherApplication();
+        await chargerTickets();
+
+    } catch (erreur) {
+        console.error("Initialisation cloud :", erreur);
+        afficherConnexion(
+            "Connexion au cloud indisponible. Réessaie quand tu as du réseau."
+        );
+    }
+}
+
+window.addEventListener("online", async function() {
+    if (utilisateurCloud && db) {
+        definirStatutCloud("☁️ Réseau retrouvé. Synchronisation…");
+        await chargerTickets();
+    }
+});
+
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function() {
+        navigator.serviceWorker
+        .register("./service-worker.js")
+        .catch(function(erreur) {
+            console.log("Service worker indisponible :", erreur);
+        });
+    });
+}
+
 
 if (window.pdfjsLib) {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -910,13 +1130,12 @@ const categories = [
 
 
 /* ========================================= */
-/* INDEXED DB */
+/* INDEXED DB : cache + file d'attente */
 /* ========================================= */
 
-const requete = indexedDB.open("NotesDeFrais", 1);
+const requete = indexedDB.open("NotesDeFrais", 2);
 
 requete.onupgradeneeded = function(event) {
-
     db = event.target.result;
 
     if (!db.objectStoreNames.contains("tickets")) {
@@ -928,18 +1147,34 @@ requete.onupgradeneeded = function(event) {
             }
         );
     }
+
+    if (!db.objectStoreNames.contains("queue")) {
+        db.createObjectStore(
+            "queue",
+            {
+                keyPath: "id",
+                autoIncrement: true
+            }
+        );
+    }
 };
 
 requete.onsuccess = function(event) {
-
     db = event.target.result;
 
-    afficherPeriodeActuelle();
-    chargerTickets();
+    if (
+        navigator.storage
+        &&
+        navigator.storage.persist
+    ) {
+        navigator.storage.persist().catch(function() {});
+    }
+
+    initialiserCloud();
 };
 
 requete.onerror = function() {
-    alert("Impossible d'ouvrir la base de données.");
+    alert("Impossible d'ouvrir la base de données locale.");
 };
 
 
@@ -1644,82 +1879,781 @@ function utiliserImageFinale(fichier) {
 
 
 /* ========================================= */
+/* OUTILS CLOUD */
+/* ========================================= */
+
+function lireTousTicketsLocaux() {
+    return new Promise(function(resolve, reject) {
+        if (!db) {
+            resolve([]);
+            return;
+        }
+
+        const transaction =
+            db.transaction(["tickets"], "readonly");
+
+        const demande =
+            transaction.objectStore("tickets").getAll();
+
+        demande.onsuccess =
+            function() {
+                resolve(demande.result || []);
+            };
+
+        demande.onerror =
+            function() {
+                reject(demande.error);
+            };
+    });
+}
+
+function ajouterTicketLocal(ticket) {
+    return new Promise(function(resolve, reject) {
+        const transaction =
+            db.transaction(["tickets"], "readwrite");
+
+        const demande =
+            transaction.objectStore("tickets").add(ticket);
+
+        demande.onsuccess =
+            function() {
+                resolve(demande.result);
+            };
+
+        demande.onerror =
+            function() {
+                reject(demande.error);
+            };
+    });
+}
+
+function modifierTicketLocal(ticket) {
+    return new Promise(function(resolve, reject) {
+        const transaction =
+            db.transaction(["tickets"], "readwrite");
+
+        const demande =
+            transaction.objectStore("tickets").put(ticket);
+
+        demande.onsuccess =
+            function() {
+                resolve();
+            };
+
+        demande.onerror =
+            function() {
+                reject(demande.error);
+            };
+    });
+}
+
+function supprimerTicketLocalParId(id) {
+    return new Promise(function(resolve, reject) {
+        const transaction =
+            db.transaction(["tickets"], "readwrite");
+
+        const demande =
+            transaction.objectStore("tickets").delete(id);
+
+        demande.onsuccess =
+            function() {
+                resolve();
+            };
+
+        demande.onerror =
+            function() {
+                reject(demande.error);
+            };
+    });
+}
+
+function lireFileAttente() {
+    return new Promise(function(resolve, reject) {
+        const transaction =
+            db.transaction(["queue"], "readonly");
+
+        const demande =
+            transaction.objectStore("queue").getAll();
+
+        demande.onsuccess =
+            function() {
+                resolve(demande.result || []);
+            };
+
+        demande.onerror =
+            function() {
+                reject(demande.error);
+            };
+    });
+}
+
+function ajouterFileAttente(action) {
+    return new Promise(function(resolve, reject) {
+        const transaction =
+            db.transaction(["queue"], "readwrite");
+
+        const demande =
+            transaction.objectStore("queue").add(action);
+
+        demande.onsuccess =
+            function() {
+                resolve(demande.result);
+            };
+
+        demande.onerror =
+            function() {
+                reject(demande.error);
+            };
+    });
+}
+
+function supprimerActionAttente(id) {
+    return new Promise(function(resolve, reject) {
+        const transaction =
+            db.transaction(["queue"], "readwrite");
+
+        const demande =
+            transaction.objectStore("queue").delete(id);
+
+        demande.onsuccess =
+            function() {
+                resolve();
+            };
+
+        demande.onerror =
+            function() {
+                reject(demande.error);
+            };
+    });
+}
+
+function creerUuid() {
+    if (crypto && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+
+    return (
+        Date.now().toString(36)
+        + "-"
+        + Math.random().toString(36).slice(2)
+    );
+}
+
+async function creerVignetteBlob(fichier) {
+    try {
+        const dataUrl =
+            await fichierVersDataURL(fichier);
+
+        const image =
+            await chargerImage(dataUrl);
+
+        const max = 420;
+        const ratio =
+            Math.min(
+                1,
+                max / Math.max(image.width, image.height)
+            );
+
+        const canvas =
+            document.createElement("canvas");
+
+        canvas.width =
+            Math.max(1, Math.round(image.width * ratio));
+
+        canvas.height =
+            Math.max(1, Math.round(image.height * ratio));
+
+        const contexte =
+            canvas.getContext("2d");
+
+        contexte.fillStyle = "#ffffff";
+        contexte.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        contexte.drawImage(
+            image,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        return await new Promise(function(resolve, reject) {
+            canvas.toBlob(
+                function(blob) {
+                    if (blob) {
+                        resolve(blob);
+                    } else {
+                        reject(new Error("Vignette impossible."));
+                    }
+                },
+                "image/jpeg",
+                0.72
+            );
+        });
+
+    } catch (erreur) {
+        console.log("Vignette non créée :", erreur);
+        return fichier;
+    }
+}
+
+function decoderFichierCloud(valeur) {
+    if (!valeur) {
+        return {
+            pages: [],
+            preview: ""
+        };
+    }
+
+    try {
+        const objet = JSON.parse(valeur);
+
+        if (Array.isArray(objet)) {
+            return {
+                pages: objet,
+                preview: objet[0] || ""
+            };
+        }
+
+        return {
+            pages:
+                Array.isArray(objet.pages)
+                ? objet.pages
+                : [],
+            preview:
+                objet.preview
+                || (
+                    Array.isArray(objet.pages)
+                    ? objet.pages[0]
+                    : ""
+                )
+        };
+
+    } catch (erreur) {
+        return {
+            pages: [valeur],
+            preview: valeur
+        };
+    }
+}
+
+async function telechargerFichierCloud(chemin) {
+    const { data, error } =
+        await cloud.storage
+        .from("justificatifs")
+        .download(chemin);
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}
+
+async function obtenirPagesTicket(ticket) {
+    if (
+        ticket.cloudPaths
+        &&
+        ticket.cloudPaths.length
+    ) {
+        const pages = [];
+
+        for (const chemin of ticket.cloudPaths) {
+            pages.push(
+                await telechargerFichierCloud(chemin)
+            );
+        }
+
+        return pages;
+    }
+
+    if (
+        ticket.pages
+        &&
+        ticket.pages.length
+    ) {
+        return ticket.pages;
+    }
+
+    return ticket.photo
+        ? [ticket.photo]
+        : [];
+}
+
+async function envoyerTicketLocalVersCloud(ticket) {
+    if (
+        !utilisateurCloud
+        ||
+        !navigator.onLine
+    ) {
+        return false;
+    }
+
+    const pages =
+        ticket.pages && ticket.pages.length
+        ? ticket.pages
+        : [ticket.photo];
+
+    if (!pages.length || !pages[0]) {
+        throw new Error("Le justificatif local ne contient plus de document.");
+    }
+
+    const dossier =
+        utilisateurCloud.id
+        + "/"
+        + creerUuid();
+
+    const cheminsPages = [];
+    const cheminsCrees = [];
+
+    try {
+        for (
+            let index = 0;
+            index < pages.length;
+            index++
+        ) {
+            const chemin =
+                dossier
+                + "/page-"
+                + String(index + 1).padStart(3, "0")
+                + ".jpg";
+
+            const { error } =
+                await cloud.storage
+                .from("justificatifs")
+                .upload(
+                    chemin,
+                    pages[index],
+                    {
+                        contentType: "image/jpeg",
+                        upsert: false
+                    }
+                );
+
+            if (error) {
+                throw error;
+            }
+
+            cheminsPages.push(chemin);
+            cheminsCrees.push(chemin);
+        }
+
+        const vignette =
+            await creerVignetteBlob(pages[0]);
+
+        const cheminApercu =
+            dossier + "/apercu.jpg";
+
+        const { error: erreurApercu } =
+            await cloud.storage
+            .from("justificatifs")
+            .upload(
+                cheminApercu,
+                vignette,
+                {
+                    contentType: "image/jpeg",
+                    upsert: false
+                }
+            );
+
+        if (erreurApercu) {
+            throw erreurApercu;
+        }
+
+        cheminsCrees.push(cheminApercu);
+
+        const infoFichier =
+            JSON.stringify({
+                pages: cheminsPages,
+                preview: cheminApercu
+            });
+
+        const { error: erreurTable } =
+            await cloud
+            .from("tickets")
+            .insert({
+                user_id: utilisateurCloud.id,
+                nom: ticket.nom,
+                date_ticket: ticket.date,
+                categorie: ticket.categorie,
+                periode_debut: ticket.periodeDebut,
+                periode_fin: ticket.periodeFin,
+                fichier: infoFichier,
+                nombre_pages: pages.length
+            });
+
+        if (erreurTable) {
+            throw erreurTable;
+        }
+
+        await supprimerTicketLocalParId(ticket.id);
+
+        return true;
+
+    } catch (erreur) {
+        console.error("Envoi cloud :", erreur);
+
+        if (cheminsCrees.length) {
+            await cloud.storage
+            .from("justificatifs")
+            .remove(cheminsCrees)
+            .catch(function() {});
+        }
+
+        throw erreur;
+    }
+}
+
+async function synchroniserTicketsLocaux() {
+    if (
+        !utilisateurCloud
+        ||
+        !navigator.onLine
+    ) {
+        return;
+    }
+
+    const ticketsLocaux =
+        await lireTousTicketsLocaux();
+
+    if (!ticketsLocaux.length) {
+        return;
+    }
+
+    definirStatutCloud(
+        "☁️ Envoi de "
+        + ticketsLocaux.length
+        + " justificatif(s)…",
+        "attente"
+    );
+
+    for (const ticket of ticketsLocaux) {
+        try {
+            await envoyerTicketLocalVersCloud(ticket);
+        } catch (erreur) {
+            definirStatutCloud(
+                "⚠️ Un justificatif reste en attente d'envoi.",
+                "erreur"
+            );
+            break;
+        }
+    }
+}
+
+async function traiterFileAttente() {
+    if (
+        !utilisateurCloud
+        ||
+        !navigator.onLine
+    ) {
+        return;
+    }
+
+    const actions =
+        await lireFileAttente();
+
+    for (const action of actions) {
+        try {
+            if (action.type === "update") {
+                const { error } =
+                    await cloud
+                    .from("tickets")
+                    .update(action.valeurs)
+                    .eq("id", action.cloudId);
+
+                if (error) {
+                    throw error;
+                }
+            }
+
+            if (action.type === "delete") {
+                const { error } =
+                    await cloud
+                    .from("tickets")
+                    .delete()
+                    .eq("id", action.cloudId);
+
+                if (error) {
+                    throw error;
+                }
+
+                if (
+                    action.paths
+                    &&
+                    action.paths.length
+                ) {
+                    const { error: erreurFichiers } =
+                        await cloud.storage
+                        .from("justificatifs")
+                        .remove(action.paths);
+
+                    if (erreurFichiers) {
+                        console.log(
+                            "Fichiers orphelins possibles :",
+                            erreurFichiers
+                        );
+                    }
+                }
+            }
+
+            await supprimerActionAttente(action.id);
+
+        } catch (erreur) {
+            console.error("File d'attente :", erreur);
+            break;
+        }
+    }
+}
+
+async function chargerTicketsCloud() {
+    const { data, error } =
+        await cloud
+        .from("tickets")
+        .select(
+            "id,nom,date_ticket,categorie,periode_debut,periode_fin,fichier,nombre_pages,created_at"
+        )
+        .order("date_ticket", { ascending: false });
+
+    if (error) {
+        throw error;
+    }
+
+    urlsApercusCloud.forEach(function(url) {
+        URL.revokeObjectURL(url);
+    });
+    urlsApercusCloud = [];
+
+    const resultat = [];
+
+    for (const ligne of (data || [])) {
+        const fichiers =
+            decoderFichierCloud(ligne.fichier);
+
+        let previewUrl = "";
+
+        if (fichiers.preview) {
+            try {
+                const miniature =
+                    await telechargerFichierCloud(
+                        fichiers.preview
+                    );
+
+                previewUrl =
+                    URL.createObjectURL(miniature);
+
+                urlsApercusCloud.push(previewUrl);
+
+            } catch (erreur) {
+                console.log(
+                    "Aperçu cloud indisponible :",
+                    erreur
+                );
+            }
+        }
+
+        resultat.push({
+            id: ligne.id,
+            source: "cloud",
+            nom: ligne.nom,
+            date: ligne.date_ticket,
+            categorie: ligne.categorie,
+            periodeDebut: ligne.periode_debut,
+            periodeFin: ligne.periode_fin,
+            nombrePages:
+                ligne.nombre_pages || fichiers.pages.length || 1,
+            cloudPaths: fichiers.pages,
+            cloudPreviewPath: fichiers.preview,
+            previewUrl: previewUrl
+        });
+    }
+
+    return resultat;
+}
+
+function pathsCompletsTicket(ticket) {
+    const paths = [];
+
+    if (
+        ticket.cloudPaths
+        &&
+        ticket.cloudPaths.length
+    ) {
+        paths.push(...ticket.cloudPaths);
+    }
+
+    if (ticket.cloudPreviewPath) {
+        paths.push(ticket.cloudPreviewPath);
+    }
+
+    return Array.from(new Set(paths));
+}
+
+
+/* ========================================= */
 /* ENREGISTRER */
 /* ========================================= */
 
-function enregistrerTicket(categorie) {
-
+async function enregistrerTicket(categorie) {
     if (!photoChoisie) {
-
         alert("Aucune photo sélectionnée.");
-
         return;
     }
 
     const nom =
-        document
-        .getElementById("nomTicket")
-        .value
-        .trim();
+        document.getElementById("nomTicket").value.trim();
 
     const date =
-        document
-        .getElementById("dateTicket")
-        .value;
+        document.getElementById("dateTicket").value;
 
     if (!nom || !date) {
-
-        alert(
-            "Merci de renseigner la date et le nom."
-        );
-
+        alert("Merci de renseigner la date et le nom.");
         return;
     }
 
-    const periode = calculerPeriode(
-        date
-    );
+    const periode =
+        calculerPeriode(date);
 
     const ticket = {
         photo: photoChoisie,
-        pages: pagesChoisies ? pagesChoisies : undefined,
+        pages:
+            pagesChoisies
+            ? pagesChoisies
+            : undefined,
         categorie: categorie,
         nom: nom,
         date: date,
         periodeDebut: periode.debutISO,
-        periodeFin: periode.finISO
+        periodeFin: periode.finISO,
+        source: "local",
+        creeLe: Date.now()
     };
 
-    const transaction =
-        db.transaction(
-            ["tickets"],
-            "readwrite"
-        );
+    try {
+        await ajouterTicketLocal(ticket);
 
-    transaction
-    .objectStore("tickets")
-    .add(ticket);
+        resetForm();
 
-    transaction.oncomplete =
-        function() {
-
-            resetForm();
-            chargerTickets();
-        };
-
-    transaction.onerror =
-        function() {
-
-            alert(
-                "Erreur pendant l'enregistrement du justificatif."
+        if (
+            utilisateurCloud
+            &&
+            navigator.onLine
+        ) {
+            definirStatutCloud(
+                "☁️ Sauvegarde du justificatif…",
+                "attente"
             );
-        };
+        } else {
+            definirStatutCloud(
+                "⏳ Hors ligne : justificatif conservé sur l'iPhone en attente d'envoi.",
+                "attente"
+            );
+        }
+
+        await chargerTickets();
+
+    } catch (erreur) {
+        console.error(erreur);
+        alert(
+            "Erreur pendant l'enregistrement local du justificatif."
+        );
+    }
 }
 
 
 /* ========================================= */
 /* CHARGER */
 /* ========================================= */
+
+async function chargerTickets() {
+    if (!db || chargementEnCours) {
+        return;
+    }
+
+    chargementEnCours = true;
+
+    try {
+        let locaux =
+            await lireTousTicketsLocaux();
+
+        locaux =
+            locaux.map(function(ticket) {
+                ticket.source = "local";
+                return ticket;
+            });
+
+        if (
+            utilisateurCloud
+            &&
+            navigator.onLine
+        ) {
+            try {
+                await synchroniserTicketsLocaux();
+                await traiterFileAttente();
+
+                locaux =
+                    await lireTousTicketsLocaux();
+
+                locaux =
+                    locaux.map(function(ticket) {
+                        ticket.source = "local";
+                        return ticket;
+                    });
+
+                const cloudTickets =
+                    await chargerTicketsCloud();
+
+                tousLesTickets =
+                    cloudTickets.concat(locaux);
+
+                definirStatutCloud(
+                    locaux.length
+                    ? "⏳ "
+                        + locaux.length
+                        + " justificatif(s) en attente d'envoi."
+                    : "☁️ Tout est sauvegardé dans le cloud.",
+                    locaux.length ? "attente" : "ok"
+                );
+
+            } catch (erreur) {
+                console.error("Chargement cloud :", erreur);
+
+                tousLesTickets = locaux;
+
+                definirStatutCloud(
+                    "⚠️ Cloud momentanément inaccessible. Les nouveaux justificatifs restent en attente sur l'iPhone.",
+                    "erreur"
+                );
+            }
+
+        } else {
+            tousLesTickets = locaux;
+
+            definirStatutCloud(
+                "⏳ Hors ligne : les nouveaux justificatifs seront envoyés automatiquement au retour du réseau.",
+                "attente"
+            );
+        }
+
+        tousLesTickets.sort(
+            function(a, b) {
+                return b.date.localeCompare(a.date);
+            }
+        );
+
+        remplirPeriodesExport();
+        actualiserCompteurPeriodeActuelle();
+        afficherTickets(tousLesTickets);
+        actualiserStockage();
+
+    } finally {
+        chargementEnCours = false;
+    }
+}
 
 function chargerTickets() {
 
@@ -1961,8 +2895,12 @@ function afficherTickets(tickets) {
                 function(ticket) {
 
                     const urlPhoto =
-                        URL.createObjectURL(
+                        ticket.previewUrl
+                        ||
+                        (
                             ticket.photo
+                            ? URL.createObjectURL(ticket.photo)
+                            : ""
                         );
 
                     const bloc =
@@ -2027,60 +2965,43 @@ function afficherTickets(tickets) {
 /* ========================================= */
 
 function ouvrirFiche(id) {
-
-    const transaction =
-        db.transaction(
-            ["tickets"],
-            "readonly"
+    ticketOuvert =
+        tousLesTickets.find(
+            function(ticket) {
+                return String(ticket.id) === String(id);
+            }
         );
 
-    const demande =
-        transaction
-        .objectStore("tickets")
-        .get(id);
+    if (!ticketOuvert) {
+        return;
+    }
 
-    demande.onsuccess =
-        function() {
+    const image =
+        document.getElementById("fichePhoto");
 
-            ticketOuvert =
-                demande.result;
+    if (ticketOuvert.previewUrl) {
+        image.src = ticketOuvert.previewUrl;
+    } else if (ticketOuvert.photo) {
+        image.src =
+            URL.createObjectURL(ticketOuvert.photo);
+    } else {
+        image.removeAttribute("src");
+    }
 
-            if (!ticketOuvert) {
-                return;
-            }
+    document.getElementById("ficheDate").value =
+        ticketOuvert.date;
 
-            document.getElementById(
-                "fichePhoto"
-            ).src =
-                URL.createObjectURL(
-                    ticketOuvert.photo
-                );
+    document.getElementById("ficheNom").value =
+        ticketOuvert.nom;
 
-            document.getElementById(
-                "ficheDate"
-            ).value =
-                ticketOuvert.date;
+    document.getElementById("ficheCategorie").value =
+        ticketOuvert.categorie;
 
-            document.getElementById(
-                "ficheNom"
-            ).value =
-                ticketOuvert.nom;
+    document.getElementById("ecranPrincipal").style.display =
+        "none";
 
-            document.getElementById(
-                "ficheCategorie"
-            ).value =
-                ticketOuvert.categorie;
-
-            document.getElementById(
-                "ecranPrincipal"
-            ).style.display =
-                "none";
-
-            document.getElementById(
-                "ficheTicket"
-            ).style.display =
-                "block";
-        };
+    document.getElementById("ficheTicket").style.display =
+        "block";
 }
 
 
@@ -2088,75 +3009,100 @@ function ouvrirFiche(id) {
 /* MODIFIER */
 /* ========================================= */
 
-function sauvegarderModification() {
-
+async function sauvegarderModification() {
     if (!ticketOuvert) {
         return;
     }
 
     const nouvelleDate =
-        document.getElementById(
-            "ficheDate"
-        ).value;
+        document.getElementById("ficheDate").value;
 
     const nouveauNom =
-        document.getElementById(
-            "ficheNom"
-        ).value.trim();
+        document.getElementById("ficheNom").value.trim();
 
     const nouvelleCategorie =
-        document.getElementById(
-            "ficheCategorie"
-        ).value;
+        document.getElementById("ficheCategorie").value;
 
-    if (
-        !nouvelleDate ||
-        !nouveauNom
-    ) {
-
-        alert(
-            "Merci de renseigner la date et le nom."
-        );
-
+    if (!nouvelleDate || !nouveauNom) {
+        alert("Merci de renseigner la date et le nom.");
         return;
     }
 
     const periode =
-        calculerPeriode(
-            nouvelleDate
+        calculerPeriode(nouvelleDate);
+
+    ticketOuvert.date = nouvelleDate;
+    ticketOuvert.nom = nouveauNom;
+    ticketOuvert.categorie = nouvelleCategorie;
+    ticketOuvert.periodeDebut = periode.debutISO;
+    ticketOuvert.periodeFin = periode.finISO;
+
+    try {
+        if (ticketOuvert.source === "local") {
+            await modifierTicketLocal(ticketOuvert);
+
+        } else {
+            const valeurs = {
+                nom: nouveauNom,
+                date_ticket: nouvelleDate,
+                categorie: nouvelleCategorie,
+                periode_debut: periode.debutISO,
+                periode_fin: periode.finISO
+            };
+
+            if (
+                utilisateurCloud
+                &&
+                navigator.onLine
+            ) {
+                const { error } =
+                    await cloud
+                    .from("tickets")
+                    .update(valeurs)
+                    .eq("id", ticketOuvert.id);
+
+                if (error) {
+                    throw error;
+                }
+
+            } else {
+                await ajouterFileAttente({
+                    type: "update",
+                    cloudId: ticketOuvert.id,
+                    valeurs: valeurs,
+                    creeLe: Date.now()
+                });
+            }
+        }
+
+        fermerFiche();
+        await chargerTickets();
+
+    } catch (erreur) {
+        console.error(erreur);
+
+        if (ticketOuvert && ticketOuvert.source === "cloud") {
+            await ajouterFileAttente({
+                type: "update",
+                cloudId: ticketOuvert.id,
+                valeurs: {
+                    nom: nouveauNom,
+                    date_ticket: nouvelleDate,
+                    categorie: nouvelleCategorie,
+                    periode_debut: periode.debutISO,
+                    periode_fin: periode.finISO
+                },
+                creeLe: Date.now()
+            }).catch(function() {});
+        }
+
+        alert(
+            "La modification a été gardée en attente et sera renvoyée au cloud dès que possible."
         );
 
-    ticketOuvert.date =
-        nouvelleDate;
-
-    ticketOuvert.nom =
-        nouveauNom;
-
-    ticketOuvert.categorie =
-        nouvelleCategorie;
-
-    ticketOuvert.periodeDebut =
-        periode.debutISO;
-
-    ticketOuvert.periodeFin =
-        periode.finISO;
-
-    const transaction =
-        db.transaction(
-            ["tickets"],
-            "readwrite"
-        );
-
-    transaction
-    .objectStore("tickets")
-    .put(ticketOuvert);
-
-    transaction.oncomplete =
-        function() {
-
-            fermerFiche();
-            chargerTickets();
-        };
+        fermerFiche();
+        await chargerTickets();
+    }
 }
 
 
@@ -2164,8 +3110,7 @@ function sauvegarderModification() {
 /* SUPPRIMER */
 /* ========================================= */
 
-function supprimerTicket() {
-
+async function supprimerTicket() {
     if (!ticketOuvert) {
         return;
     }
@@ -2178,24 +3123,77 @@ function supprimerTicket() {
         return;
     }
 
-    const transaction =
-        db.transaction(
-            ["tickets"],
-            "readwrite"
+    const ticket =
+        ticketOuvert;
+
+    try {
+        await supprimerTicketSansConfirmation(ticket);
+
+        ticketOuvert = null;
+        fermerFiche();
+        await chargerTickets();
+
+    } catch (erreur) {
+        console.error(erreur);
+        alert(
+            "La suppression n'a pas pu être terminée. Réessaie avec une connexion internet."
         );
+    }
+}
 
-    transaction
-    .objectStore("tickets")
-    .delete(ticketOuvert.id);
+async function supprimerTicketSansConfirmation(ticket) {
+    if (ticket.source === "local") {
+        await supprimerTicketLocalParId(ticket.id);
+        return;
+    }
 
-    transaction.oncomplete =
-        function() {
+    const paths =
+        pathsCompletsTicket(ticket);
 
-            ticketOuvert = null;
+    if (
+        utilisateurCloud
+        &&
+        navigator.onLine
+    ) {
+        const { error } =
+            await cloud
+            .from("tickets")
+            .delete()
+            .eq("id", ticket.id);
 
-            fermerFiche();
-            chargerTickets();
-        };
+        if (error) {
+            throw error;
+        }
+
+        if (paths.length) {
+            const { error: erreurFichiers } =
+                await cloud.storage
+                .from("justificatifs")
+                .remove(paths);
+
+            if (erreurFichiers) {
+                console.log(
+                    "Suppression des fichiers incomplète :",
+                    erreurFichiers
+                );
+            }
+        }
+
+    } else {
+        await ajouterFileAttente({
+            type: "delete",
+            cloudId: ticket.id,
+            paths: paths,
+            creeLe: Date.now()
+        });
+
+        tousLesTickets =
+            tousLesTickets.filter(
+                function(element) {
+                    return element.id !== ticket.id;
+                }
+            );
+    }
 }
 
 
@@ -2470,9 +3468,13 @@ async function creerPdfCategorie(
     for (const ticket of tickets) {
 
         const pagesTicket =
-            ticket.pages && ticket.pages.length
-            ? ticket.pages
-            : [ticket.photo];
+            await obtenirPagesTicket(ticket);
+
+        if (!pagesTicket.length) {
+            throw new Error(
+                "Document introuvable pour : " + ticket.nom
+            );
+        }
 
         for (const fichierPage of pagesTicket) {
 
@@ -2594,7 +3596,7 @@ async function extrairePeriode() {
     document.getElementById(
         "statutExport"
     ).textContent =
-        "Création des PDF...";
+        "Téléchargement des justificatifs et création des PDF…";
 
     document.getElementById(
         "zonePdf"
@@ -2936,115 +3938,79 @@ function proposerNettoyage() {
 /* NETTOYER PÉRIODE */
 /* ========================================= */
 
-function nettoyerPeriodeExportee() {
-
+async function nettoyerPeriodeExportee() {
     if (!periodeDernierExport) {
-
-        alert(
-            "Aucune période n'a encore été extraite."
-        );
-
+        alert("Aucune période n'a encore été extraite.");
         return;
     }
 
     const ticketsASupprimer =
         tousLesTickets.filter(
             function(ticket) {
-
                 return (
-                    ticket.periodeDebut ===
-                    periodeDernierExport.debut
+                    ticket.periodeDebut === periodeDernierExport.debut
                     &&
-                    ticket.periodeFin ===
-                    periodeDernierExport.fin
+                    ticket.periodeFin === periodeDernierExport.fin
                 );
             }
         );
 
-    if (
-        ticketsASupprimer.length ===
-        0
-    ) {
-
-        alert(
-            "Cette période est déjà vide."
-        );
-
+    if (ticketsASupprimer.length === 0) {
+        alert("Cette période est déjà vide.");
         return;
     }
 
     const confirmation =
         confirm(
             "Supprimer définitivement les "
-            +
-            ticketsASupprimer.length
-            +
-            " justificatif(s) de la période "
-            +
-            formaterDateISO(
-                periodeDernierExport.debut
-            )
-            +
-            " → "
-            +
-            formaterDateISO(
-                periodeDernierExport.fin
-            )
-            +
-            " ?"
+            + ticketsASupprimer.length
+            + " justificatif(s) de la période "
+            + formaterDateISO(periodeDernierExport.debut)
+            + " → "
+            + formaterDateISO(periodeDernierExport.fin)
+            + " du cloud ?"
         );
 
     if (!confirmation) {
         return;
     }
 
-    const transaction =
-        db.transaction(
-            ["tickets"],
-            "readwrite"
-        );
-
-    const stockage =
-        transaction.objectStore(
-            "tickets"
-        );
-
-    ticketsASupprimer.forEach(
-        function(ticket) {
-            stockage.delete(
-                ticket.id
-            );
-        }
+    definirStatutCloud(
+        "☁️ Suppression de la période…",
+        "attente"
     );
 
-    transaction.oncomplete =
-        function() {
+    try {
+        for (const ticket of ticketsASupprimer) {
+            await supprimerTicketSansConfirmation(ticket);
+        }
 
-            fichiersPdfGeneres = [];
-            periodeDernierExport = null;
+        fichiersPdfGeneres = [];
+        periodeDernierExport = null;
 
-            urlsPdf.forEach(
-                function(url) {
-                    URL.revokeObjectURL(
-                        url
-                    );
-                }
-            );
+        urlsPdf.forEach(function(url) {
+            URL.revokeObjectURL(url);
+        });
 
-            urlsPdf = [];
+        urlsPdf = [];
 
-            document.getElementById(
-                "zonePdf"
-            ).style.display =
-                "none";
+        document.getElementById("zonePdf").style.display =
+            "none";
 
-            document.getElementById(
-                "statutExport"
-            ).textContent =
-                "✅ Période nettoyée.";
+        document.getElementById("statutExport").textContent =
+            navigator.onLine
+            ? "✅ Période supprimée du cloud."
+            : "⏳ Suppression mise en attente.";
 
-            chargerTickets();
-        };
+        await chargerTickets();
+
+    } catch (erreur) {
+        console.error(erreur);
+        alert(
+            "Une partie de la période n'a pas pu être supprimée. Rien d'autre ne sera effacé tant que la connexion n'est pas revenue."
+        );
+        await chargerTickets();
+    }
 }
 
 
