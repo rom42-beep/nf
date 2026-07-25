@@ -1210,6 +1210,23 @@ async function seConnecter() {
 async function initialiserCloud() {
     afficherPeriodeActuelle();
 
+    /*
+     * Hors ligne : ne jamais bloquer l'utilisateur sur l'écran
+     * de connexion. On ouvre l'application et les nouveaux tickets
+     * restent dans IndexedDB avec une croix jusqu'au retour du réseau.
+     */
+    if (!navigator.onLine) {
+        utilisateurCloud = null;
+        afficherApplication();
+        afficherEtatConnexionCloud(false, "● Déconnecté");
+        await chargerTickets();
+        return;
+    }
+
+    /*
+     * Avec Internet, Supabase doit être disponible pour vérifier
+     * la session ou proposer la connexion.
+     */
     if (!cloud) {
         afficherConnexion(
             "Supabase n'a pas pu être chargé. Vérifie la connexion internet."
@@ -1230,6 +1247,10 @@ async function initialiserCloud() {
             ? data.session
             : null;
 
+        /*
+         * Internet présent mais aucune session conservée :
+         * on demande alors seulement l'e-mail et le mot de passe.
+         */
         if (!session || !session.user) {
             afficherConnexion();
             return;
@@ -1242,8 +1263,21 @@ async function initialiserCloud() {
 
     } catch (erreur) {
         console.error("Initialisation cloud :", erreur);
+
+        /*
+         * Si l'état réseau a changé pendant l'initialisation,
+         * on privilégie toujours l'accès terrain hors ligne.
+         */
+        if (!navigator.onLine) {
+            utilisateurCloud = null;
+            afficherApplication();
+            afficherEtatConnexionCloud(false, "● Déconnecté");
+            await chargerTickets();
+            return;
+        }
+
         afficherConnexion(
-            "Connexion au cloud indisponible. Réessaie quand tu as du réseau."
+            "Connexion au cloud indisponible. Réessaie dans un instant."
         );
     }
 }
@@ -1253,9 +1287,46 @@ window.addEventListener("offline", function() {
 });
 
 window.addEventListener("online", async function() {
-    if (utilisateurCloud && db) {
+    if (!db) {
+        return;
+    }
+
+    if (utilisateurCloud) {
         afficherEtatConnexionCloud(true, "● Connecté");
         await chargerTickets();
+        return;
+    }
+
+    if (!cloud) {
+        afficherEtatConnexionCloud(false, "● Déconnecté");
+        return;
+    }
+
+    try {
+        const { data, error } =
+            await cloud.auth.getSession();
+
+        if (error) {
+            throw error;
+        }
+
+        const session =
+            data && data.session
+            ? data.session
+            : null;
+
+        if (session && session.user) {
+            utilisateurCloud = session.user;
+            afficherApplication();
+            afficherEtatConnexionCloud(true, "● Connecté");
+            await chargerTickets();
+        } else {
+            afficherConnexion();
+        }
+
+    } catch (erreur) {
+        console.error("Retour réseau :", erreur);
+        afficherEtatConnexionCloud(false, "● Déconnecté");
     }
 });
 
