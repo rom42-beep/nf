@@ -1,4 +1,4 @@
-const CACHE_NAME = "notes-de-frais-v2";
+const CACHE_NAME = "notes-de-frais-v3";
 
 const ASSETS = [
     "./",
@@ -54,16 +54,37 @@ self.addEventListener("fetch", function(event) {
     }
 
     const request = event.request;
+    const url = new URL(request.url);
 
-    // Always prefer the network for page navigation so GitHub updates appear quickly.
+    /*
+     * IMPORTANT :
+     * Ne jamais mettre en cache les réponses Supabase.
+     * La liste des justificatifs doit toujours refléter
+     * immédiatement ce qui vient d'être envoyé au cloud.
+     */
+    if (
+        url.hostname.endsWith(".supabase.co")
+        || url.hostname.endsWith(".supabase.in")
+    ) {
+        event.respondWith(fetch(request));
+        return;
+    }
+
+    /*
+     * Navigation : réseau d'abord, cache seulement si hors ligne.
+     * Ainsi les mises à jour GitHub Pages apparaissent rapidement.
+     */
     if (request.mode === "navigate") {
         event.respondWith(
             fetch(request)
             .then(function(response) {
-                const copy = response.clone();
-                caches.open(CACHE_NAME).then(function(cache) {
-                    cache.put("./index.html", copy);
+                const copie = response.clone();
+
+                caches.open(CACHE_NAME)
+                .then(function(cache) {
+                    cache.put("./index.html", copie);
                 });
+
                 return response;
             })
             .catch(function() {
@@ -73,10 +94,14 @@ self.addEventListener("fetch", function(event) {
                     });
             })
         );
+
         return;
     }
 
-    // Static libraries: cache first, network fallback.
+    /*
+     * Bibliothèques et fichiers statiques :
+     * cache d'abord pour conserver le mode hors ligne.
+     */
     event.respondWith(
         caches.match(request)
         .then(function(cached) {
@@ -87,14 +112,22 @@ self.addEventListener("fetch", function(event) {
             return fetch(request)
             .then(function(response) {
                 if (
-                    response &&
-                    (response.ok || response.type === "opaque")
+                    response
+                    &&
+                    (
+                        response.ok
+                        ||
+                        response.type === "opaque"
+                    )
                 ) {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then(function(cache) {
-                        cache.put(request, copy);
+                    const copie = response.clone();
+
+                    caches.open(CACHE_NAME)
+                    .then(function(cache) {
+                        cache.put(request, copie);
                     });
                 }
+
                 return response;
             });
         })
