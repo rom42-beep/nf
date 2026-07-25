@@ -20,6 +20,8 @@
   src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js">
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
 <style>
 :root {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
@@ -634,38 +636,35 @@ details.stockage .note {
     color: var(--danger);
 }
 
+/* État de sauvegarde cloud affiché sur chaque justificatif */
 .ticket {
     position: relative;
-    padding-right: 46px;
+    padding-right: 48px;
 }
 
 .ticket-statut-cloud {
     position: absolute;
     top: 12px;
     right: 12px;
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 800;
     line-height: 1;
+    z-index: 2;
 }
 
 .ticket-statut-cloud.ok {
-    background: #eef9f1;
-    color: #26733a;
+    background: #eaf8ee;
+    color: #28743c;
 }
 
 .ticket-statut-cloud.attente {
-    background: #fff8e8;
-    color: #8a6200;
-}
-
-.ticket-statut-cloud.erreur {
-    background: #fff3f2;
+    background: #fff4f2;
     color: var(--danger);
 }
 
@@ -1022,7 +1021,7 @@ function definirStatutCloud(texte, classe) {
     zone.className = classe || "";
 }
 
-function definirConnexionCloud(ok, texte) {
+function afficherEtatConnexionCloud(ok, texte) {
     if (ok) {
         definirStatutCloud(
             texte || "☁️ Cloud connecté",
@@ -1030,31 +1029,23 @@ function definirConnexionCloud(ok, texte) {
         );
     } else {
         definirStatutCloud(
-            texte || "☁️ Cloud hors connexion",
+            texte || "☁️ Cloud inaccessible",
             "erreur"
         );
     }
 }
 
-function statutTicketCloud(ticket) {
-    if (ticket.source === "cloud") {
+function obtenirStatutTicketCloud(ticket) {
+    if (ticket && ticket.source === "cloud") {
         return {
-            icone: "✓",
+            symbole: "✓",
             classe: "ok",
             titre: "Sauvegardé dans le cloud"
         };
     }
 
-    if (ticket.syncErreur) {
-        return {
-            icone: "✕",
-            classe: "erreur",
-            titre: "Échec de l’envoi au cloud"
-        };
-    }
-
     return {
-        icone: "✕",
+        symbole: "✕",
         classe: "attente",
         titre: "Pas encore sauvegardé dans le cloud"
     };
@@ -1112,7 +1103,7 @@ async function seConnecter() {
     utilisateurCloud = data.user;
     document.getElementById("authPassword").value = "";
     afficherApplication();
-    definirConnexionCloud(true, "☁️ Cloud connecté");
+    afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
     await chargerTickets();
 }
 
@@ -1146,7 +1137,7 @@ async function initialiserCloud() {
 
         utilisateurCloud = session.user;
         afficherApplication();
-        definirConnexionCloud(true, "☁️ Cloud connecté");
+        afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
         await chargerTickets();
 
     } catch (erreur) {
@@ -1159,7 +1150,7 @@ async function initialiserCloud() {
 
 window.addEventListener("online", async function() {
     if (utilisateurCloud && db) {
-        definirConnexionCloud(true, "☁️ Cloud connecté");
+        afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
         await chargerTickets();
     }
 });
@@ -2264,9 +2255,16 @@ function avecDelaiMaximum(promise, millisecondes, message) {
     return Promise.race([
         promise,
         new Promise(function(_, reject) {
-            setTimeout(function() {
-                reject(new Error(message || "Délai dépassé."));
-            }, millisecondes);
+            setTimeout(
+                function() {
+                    reject(
+                        new Error(
+                            message || "Le délai d'envoi au cloud est dépassé."
+                        )
+                    );
+                },
+                millisecondes
+            );
         })
     ]);
 }
@@ -2352,7 +2350,7 @@ async function envoyerTicketLocalVersCloud(ticket) {
                     }
                 ),
                 30000,
-                "Envoi de l’aperçu trop long."
+                "Envoi de l'aperçu trop long."
             );
 
         if (erreurApercu) {
@@ -2382,7 +2380,7 @@ async function envoyerTicketLocalVersCloud(ticket) {
                     nombre_pages: pages.length
                 }),
                 30000,
-                "Enregistrement du ticket dans le cloud trop long."
+                "Enregistrement du justificatif dans le cloud trop long."
             );
 
         if (erreurTable) {
@@ -2423,13 +2421,18 @@ async function synchroniserTicketsLocaux() {
         return;
     }
 
-    definirConnexionCloud(true, "☁️ Cloud connecté");
+    definirStatutCloud(
+        "☁️ Envoi de "
+        + ticketsLocaux.length
+        + " justificatif(s)…",
+        "attente"
+    );
 
     for (const ticket of ticketsLocaux) {
         try {
             await envoyerTicketLocalVersCloud(ticket);
         } catch (erreur) {
-            ticket.syncErreur = true;
+            // Le ticket reste local : il gardera sa croix rouge à l'écran.
             break;
         }
     }
@@ -2633,16 +2636,14 @@ async function enregistrerTicket(categorie) {
             &&
             navigator.onLine
         ) {
-            definirConnexionCloud(true, "☁️ Cloud connecté");
+            afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
         } else {
-            definirConnexionCloud(
+            afficherEtatConnexionCloud(
                 false,
                 "☁️ Hors ligne — envoi automatique au retour du réseau"
             );
         }
 
-        // On affiche immédiatement le ticket local avec une croix,
-        // puis la synchronisation le remplacera par la version cloud.
         await chargerTickets();
 
     } catch (erreur) {
@@ -2699,14 +2700,14 @@ async function chargerTickets() {
                 tousLesTickets =
                     cloudTickets.concat(locaux);
 
-                definirConnexionCloud(true, "☁️ Cloud connecté");
+                afficherEtatConnexionCloud(true, "☁️ Cloud connecté");
 
             } catch (erreur) {
                 console.error("Chargement cloud :", erreur);
 
                 tousLesTickets = locaux;
 
-                definirConnexionCloud(
+                afficherEtatConnexionCloud(
                     false,
                     "☁️ Cloud inaccessible — les justificatifs restent sur l’iPhone"
                 );
@@ -2715,7 +2716,7 @@ async function chargerTickets() {
         } else {
             tousLesTickets = locaux;
 
-            definirConnexionCloud(
+            afficherEtatConnexionCloud(
                 false,
                 "☁️ Hors ligne — envoi automatique au retour du réseau"
             );
@@ -2993,15 +2994,15 @@ function afficherTickets(tickets) {
                     bloc.className =
                         "ticket";
 
-                    const statutCloudTicket =
-                        statutTicketCloud(ticket);
+                    const etatCloudTicket =
+                        obtenirStatutTicketCloud(ticket);
 
                     bloc.innerHTML = `
                         <span
-                            class="ticket-statut-cloud ${statutCloudTicket.classe}"
-                            title="${statutCloudTicket.titre}"
-                            aria-label="${statutCloudTicket.titre}"
-                        >${statutCloudTicket.icone}</span>
+                            class="ticket-statut-cloud ${etatCloudTicket.classe}"
+                            title="${etatCloudTicket.titre}"
+                            aria-label="${etatCloudTicket.titre}"
+                        >${etatCloudTicket.symbole}</span>
 
                         <img
                             src="${urlPhoto}"
