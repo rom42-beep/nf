@@ -2433,6 +2433,17 @@ async function synchroniserTicketsLocaux() {
             await envoyerTicketLocalVersCloud(ticket);
         } catch (erreur) {
             // Le ticket reste local : il gardera sa croix rouge à l'écran.
+            console.error("Échec synchronisation justificatif :", erreur);
+
+            const detail =
+                erreur && (erreur.message || erreur.error_description)
+                ? (erreur.message || erreur.error_description)
+                : String(erreur || "Erreur inconnue");
+
+            definirStatutCloud(
+                "☁️ Cloud connecté — échec d’envoi : " + detail,
+                "erreur"
+            );
             break;
         }
     }
@@ -2737,50 +2748,6 @@ async function chargerTickets() {
         chargementEnCours = false;
     }
 }
-
-function chargerTickets() {
-
-    if (!db) {
-        return;
-    }
-
-    const transaction =
-        db.transaction(
-            ["tickets"],
-            "readonly"
-        );
-
-    const demande =
-        transaction
-        .objectStore("tickets")
-        .getAll();
-
-    demande.onsuccess =
-        function() {
-
-            tousLesTickets =
-                demande.result || [];
-
-            tousLesTickets.sort(
-                function(a, b) {
-                    return b.date.localeCompare(
-                        a.date
-                    );
-                }
-            );
-
-            remplirPeriodesExport();
-
-            actualiserCompteurPeriodeActuelle();
-
-            afficherTickets(
-                tousLesTickets
-            );
-
-            actualiserStockage();
-        };
-}
-
 
 /* ========================================= */
 /* FILTRES */
