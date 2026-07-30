@@ -771,30 +771,60 @@ details.stockage .note {
 
 
 
-/* Navigation principale */
-.navigation-sections {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin: 14px 0 6px;
+/* Séparation et menus principaux */
+.separateur-sections {
+    height: 1px;
+    margin: 26px 4px 18px;
+    background: linear-gradient(90deg, transparent, #b9cbe0 14%, #b9cbe0 86%, transparent);
 }
-.navigation-sections button {
-    background: white;
-    border-color: #b9cbe0;
-    min-height: 58px;
+
+.menu-principal {
+    margin-top: 12px;
+    background: var(--carte);
+    border: 1px solid var(--bordure);
+    border-radius: 18px;
+    box-shadow: var(--ombre);
+    overflow: hidden;
 }
-.vue-section {
+
+.menu-principal > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 17px 18px;
+    font-size: 17px;
+    font-weight: 750;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--texte);
+}
+
+.menu-principal > summary::-webkit-details-marker {
     display: none;
 }
-.vue-section.active {
-    display: block;
+
+.menu-principal > summary::after {
+    content: "⌄";
+    color: var(--bleu);
+    font-size: 22px;
+    line-height: 1;
+    transition: transform .18s ease;
 }
-.retour-section {
-    width: 100%;
-    margin: 4px 0 14px;
-    background: white;
-    border-color: #b9cbe0;
+
+.menu-principal[open] > summary::after {
+    transform: rotate(180deg);
 }
+
+.menu-principal-contenu {
+    padding: 0 14px 16px;
+    border-top: 1px solid #edf1f5;
+}
+
+.menu-principal .filtres {
+    margin-top: 16px;
+    box-shadow: none;
+}
+
 .bouton-annuler-ajout {
     width: 100%;
     margin-top: 12px;
@@ -802,18 +832,50 @@ details.stockage .note {
     background: #fff3f2;
     border-color: #ffd1cc;
 }
+
 .note-frais-table {
     min-width: 900px;
 }
+
 .note-frais-table .code-projet-jour {
     width: 130px;
 }
-@media (max-width: 520px) {
-    .navigation-sections {
-        grid-template-columns: 1fr;
-    }
+
+/* Indicateur discret pendant l’analyse OCR */
+.ocr-chargement {
+    display: none;
+    align-items: center;
+    gap: 9px;
+    margin: -4px 0 14px;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: #f5f8fc;
+    color: var(--secondaire);
+    font-size: 13px;
+    font-weight: 650;
 }
 
+.ocr-chargement.visible {
+    display: flex;
+}
+
+.ocr-roue {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    border: 2px solid #cad7e5;
+    border-top-color: var(--bleu);
+    border-radius: 50%;
+    animation: rotation-ocr .8s linear infinite;
+}
+
+@keyframes rotation-ocr {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ocr-roue { animation-duration: 1.6s; }
+}
 </style>
 </head>
 
@@ -876,6 +938,11 @@ details.stockage .note {
 
         <h2>Informations</h2>
 
+        <div id="ocrChargement" class="ocr-chargement" role="status" aria-live="polite">
+            <span class="ocr-roue" aria-hidden="true"></span>
+            <span>Analyse du justificatif…</span>
+        </div>
+
         <label for="dateTicket">Date du justificatif :</label>
         <br>
         <input type="date" id="dateTicket">
@@ -917,70 +984,62 @@ details.stockage .note {
         <button class="bouton-annuler-ajout" onclick="annulerAjoutTicket()">✕ Annuler l’ajout</button>
     </div>
 
-    <div class="navigation-sections" id="navigationSections">
-        <button onclick="ouvrirSection('justificatifs')">🎟️ Mes justificatifs</button>
-        <button onclick="ouvrirSection('note-frais')">📊 Note de frais</button>
-    </div>
+    <div class="separateur-sections" aria-hidden="true"></div>
 
-    <section id="sectionJustificatifs" class="vue-section">
-        <button class="retour-section" onclick="fermerSections()">← Retour</button>
-        <h2>Mes justificatifs</h2>
-        <div id="liste"></div>
+    <details class="menu-principal" id="menuJustificatifs">
+        <summary>🎟️ Mes justificatifs</summary>
+        <div class="menu-principal-contenu">
+            <div id="liste"></div>
 
-        <!-- FILTRES regroupés avec les justificatifs -->
-        <details class="filtres">
-            <summary>🔎 Filtres</summary>
+            <details class="filtres">
+                <summary>🔎 Filtres</summary>
+                <div class="details-contenu">
+                    <p><strong>Catégories</strong></p>
 
-            <div class="details-contenu">
+                    <div class="filtre-categories">
+                        <label>
+                            <input type="checkbox" class="filtreCategorie" value="Restauration">
+                            🍽️ Restauration
+                        </label>
 
-                <p><strong>Catégories</strong></p>
+                        <label>
+                            <input type="checkbox" class="filtreCategorie" value="Hébergements">
+                            🏨 Hébergements
+                        </label>
 
-                <div class="filtre-categories">
-                    <label>
-                        <input type="checkbox" class="filtreCategorie" value="Restauration">
-                        🍽️ Restauration
-                    </label>
+                        <label>
+                            <input type="checkbox" class="filtreCategorie" value="Transport - Péage">
+                            🚗 Transport - Péage
+                        </label>
 
-                    <label>
-                        <input type="checkbox" class="filtreCategorie" value="Hébergements">
-                        🏨 Hébergements
-                    </label>
+                        <label>
+                            <input type="checkbox" class="filtreCategorie" value="Divers - Carburant">
+                            ⛽ Divers - Carburant
+                        </label>
+                    </div>
 
-                    <label>
-                        <input type="checkbox" class="filtreCategorie" value="Transport - Péage">
-                        🚗 Transport - Péage
-                    </label>
+                    <p><strong>Date ou intervalle</strong></p>
 
-                    <label>
-                        <input type="checkbox" class="filtreCategorie" value="Divers - Carburant">
-                        ⛽ Divers - Carburant
-                    </label>
+                    <label for="filtreDateDebut">Du :</label>
+                    <br>
+                    <input type="date" id="filtreDateDebut">
+
+                    <br>
+
+                    <label for="filtreDateFin">Au :</label>
+                    <br>
+                    <input type="date" id="filtreDateFin">
+
+                    <div class="actions-filtres">
+                        <button onclick="appliquerFiltres()">🔎 Appliquer</button>
+                        <button onclick="reinitialiserFiltres()">↩️ Réinitialiser</button>
+                    </div>
                 </div>
+            </details>
+        </div>
+    </details>
 
-                <p><strong>Date ou intervalle</strong></p>
-
-                <label for="filtreDateDebut">Du :</label>
-                <br>
-                <input type="date" id="filtreDateDebut">
-
-                <br>
-
-                <label for="filtreDateFin">Au :</label>
-                <br>
-                <input type="date" id="filtreDateFin">
-
-                <div class="actions-filtres">
-                    <button onclick="appliquerFiltres()">🔎 Appliquer</button>
-                    <button onclick="reinitialiserFiltres()">↩️ Réinitialiser</button>
-                </div>
-
-            </div>
-        </details>
-    </section>
-
-    <section id="sectionNoteFrais" class="vue-section">
-        <button class="retour-section" onclick="fermerSections()">← Retour</button>
-        <details class="note-frais" open>
+    <details class="menu-principal note-frais" id="menuNoteFrais">
         <summary>📊 Note de frais</summary>
         <div class="note-frais-contenu">
             <div id="noteFraisPeriode" class="note-frais-periode"></div>
@@ -988,8 +1047,7 @@ details.stockage .note {
             <p class="note">Les frais sont additionnés automatiquement par jour. Les kilomètres et l’objet se saisissent manuellement et sont sauvegardés automatiquement.</p>
             <div id="noteFraisTableau" class="note-frais-table-wrap"></div>
         </div>
-        </details>
-    </section>
+    </details>
 
     <div class="export">
 
@@ -2255,24 +2313,10 @@ function utiliserImageFinale(fichier) {
 
 
 
-function ouvrirSection(section) {
-    document.getElementById("sectionJustificatifs").classList.toggle("active", section === "justificatifs");
-    document.getElementById("sectionNoteFrais").classList.toggle("active", section === "note-frais");
-    document.getElementById("navigationSections").style.display = "none";
-    const cible = section === "justificatifs"
-        ? document.getElementById("sectionJustificatifs")
-        : document.getElementById("sectionNoteFrais");
-    window.scrollTo({ top: cible.offsetTop - 12, behavior: "smooth" });
-}
-
-function fermerSections() {
-    document.getElementById("sectionJustificatifs").classList.remove("active");
-    document.getElementById("sectionNoteFrais").classList.remove("active");
-    document.getElementById("navigationSections").style.display = "";
-    window.scrollTo({ top: document.getElementById("navigationSections").offsetTop - 12, behavior: "smooth" });
-}
 
 function annulerAjoutTicket() {
+    const indicateurOCR = document.getElementById("ocrChargement");
+    if (indicateurOCR) indicateurOCR.classList.remove("visible");
     photoChoisie = null;
     pagesChoisies = null;
     document.getElementById("prisePhoto").value = "";
@@ -2292,6 +2336,8 @@ let ocrEnCours = false;
 async function analyserJustificatif(fichier) {
     if (!fichier || !window.Tesseract || ocrEnCours) return;
     ocrEnCours = true;
+    const indicateurOCR = document.getElementById("ocrChargement");
+    if (indicateurOCR) indicateurOCR.classList.add("visible");
     try {
         const worker = await Tesseract.createWorker(
             "fra",
@@ -2314,6 +2360,7 @@ async function analyserJustificatif(fichier) {
         console.warn("Détection automatique indisponible :", erreur);
     } finally {
         ocrEnCours = false;
+        if (indicateurOCR) indicateurOCR.classList.remove("visible");
     }
 }
 
