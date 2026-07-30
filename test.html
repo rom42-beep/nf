@@ -669,6 +669,15 @@ details.stockage .note {
     transform: translate(-50%, 0);
 }
 
+/* Permet d'afficher le détail d'une erreur Supabase sans le tronquer. */
+.popup-cloud.erreur {
+    border-radius: 16px;
+    width: min(620px, calc(100vw - 32px));
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
 .popup-cloud.succes {
     background: #26733a;
 }
@@ -1123,8 +1132,6 @@ details.stockage .note {
         </div>
     </details>
 
-<div class="separateur-sections" aria-hidden="true"></div>
-  
     <div class="stockage">
         <h2>💾 Stockage</h2>
 
@@ -2936,10 +2943,15 @@ async function envoyerTicketLocalVersCloud(ticket) {
         return true;
 
     } catch (erreur) {
+        const detailErreur =
+            erreur && (erreur.message || erreur.error_description || erreur.details)
+            ? (erreur.message || erreur.error_description || erreur.details)
+            : String(erreur || "Erreur inconnue");
+
         afficherPopupCloud(
-            "✕ Échec de l’envoi",
+            "✕ Échec de l’envoi : " + detailErreur,
             "erreur",
-            4000
+            8000
         );
 
         console.error("Envoi cloud :", erreur);
