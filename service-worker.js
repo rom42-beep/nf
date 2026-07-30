@@ -1,4 +1,4 @@
-const CACHE_NAME = "notes-de-frais-v6-upload-octets";
+const CACHE_NAME = "notes-de-frais-v12";
 
 const ASSETS = [
     "./",
@@ -12,8 +12,6 @@ const ASSETS = [
     "https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js",
     "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js",
     "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
-
-    /* OCR : moteur, worker, coeur WebAssembly et langue française. */
     "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
     "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
     "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-simd-lstm.wasm.js",
@@ -23,16 +21,17 @@ const ASSETS = [
     "https://tessdata.projectnaptha.com/4.0.0_fast/fra.traineddata.gz"
 ];
 
-async function mettreEnCache(cache, url) {
+async function mettreEnCacheSansBloquer(cache, url) {
     try {
-        const requete = new Request(url, { mode: "cors", cache: "reload" });
-        const reponse = await fetch(requete);
-        if (!reponse || (!reponse.ok && reponse.type !== "opaque")) {
-            throw new Error("Réponse HTTP non valide");
+        const reponse = await fetch(
+            new Request(url, { cache: "reload", mode: "cors" })
+        );
+
+        if (reponse && (reponse.ok || reponse.type === "opaque")) {
+            await cache.put(url, reponse.clone());
         }
-        await cache.put(url, reponse.clone());
     } catch (erreur) {
-        console.warn("Mise en cache différée :", url, erreur);
+        console.warn("Ressource non précachée :", url, erreur);
     }
 }
 
@@ -42,7 +41,7 @@ self.addEventListener("install", function(event) {
         .then(function(cache) {
             return Promise.allSettled(
                 ASSETS.map(function(url) {
-                    return mettreEnCache(cache, url);
+                    return mettreEnCacheSansBloquer(cache, url);
                 })
             );
         })
@@ -55,14 +54,14 @@ self.addEventListener("install", function(event) {
 self.addEventListener("activate", function(event) {
     event.waitUntil(
         caches.keys()
-        .then(function(keys) {
+        .then(function(noms) {
             return Promise.all(
-                keys
-                .filter(function(key) {
-                    return key !== CACHE_NAME;
+                noms
+                .filter(function(nom) {
+                    return nom !== CACHE_NAME;
                 })
-                .map(function(key) {
-                    return caches.delete(key);
+                .map(function(nom) {
+                    return caches.delete(nom);
                 })
             );
         })
@@ -75,39 +74,74 @@ self.addEventListener("activate", function(event) {
 self.addEventListener("fetch", function(event) {
     if (event.request.method !== "GET") return;
 
-    const request = event.request;
+    const requete = event.request;
 
-    if (request.mode === "navigate") {
+    /*
+     * Pour le document principal : réseau d'abord.
+     * Une nouvelle version GitHub Pages remplace donc immédiatement le cache.
+     */
+    if (requete.mode === "navigate") {
         event.respondWith(
-            fetch(request, { cache: "no-store" })
-            .then(function(response) {
-                const copie = response.clone();
-                caches.open(CACHE_NAME).then(function(cache) {
-                    cache.put("./index.html", copie);
-                });
-                return response;
+            fetch(requete, { cache: "no-store" })
+            .then(function(reponse) {
+                if (reponse && reponse.ok) {
+                    const copie = reponse.clone();
+                    caches.open(CACHE_NAME).then(function(cache) {
+                        cache.put("./index.html", copie);
+                    });
+                }
+                return reponse;
+            })
+            .catch(async function() {
+                return (
+                    await caches.match("./index.html")
+                    || await caches.match("./")
+                    || Response.error()
+                );
+            })
+        );
+        return;
+    }
+
+    /*
+     * Les fichiers du même site sont également vérifiés sur le réseau avant
+     * le cache. Les bibliothèques externes restent cache-first pour l'usage hors ligne.
+     */
+    const memeOrigine = new URL(requete.url).origin === self.location.origin;
+
+    if (memeOrigine) {
+        event.respondWith(
+            fetch(requete, { cache: "no-store" })
+            .then(function(reponse) {
+                if (reponse && reponse.ok) {
+                    const copie = reponse.clone();
+                    caches.open(CACHE_NAME).then(function(cache) {
+                        cache.put(requete, copie);
+                    });
+                }
+                return reponse;
             })
             .catch(function() {
-                return caches.match("./index.html");
+                return caches.match(requete);
             })
         );
         return;
     }
 
     event.respondWith(
-        caches.match(request, { ignoreSearch: true })
-        .then(function(cached) {
-            if (cached) return cached;
+        caches.match(requete)
+        .then(function(copieCache) {
+            if (copieCache) return copieCache;
 
-            return fetch(request)
-            .then(function(response) {
-                if (response && (response.ok || response.type === "opaque")) {
-                    const copie = response.clone();
+            return fetch(requete)
+            .then(function(reponse) {
+                if (reponse && (reponse.ok || reponse.type === "opaque")) {
+                    const copie = reponse.clone();
                     caches.open(CACHE_NAME).then(function(cache) {
-                        cache.put(request, copie);
+                        cache.put(requete, copie);
                     });
                 }
-                return response;
+                return reponse;
             });
         })
     );
