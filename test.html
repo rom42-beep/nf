@@ -748,11 +748,81 @@ details.stockage .note {
 .note-frais[open] > summary::after { transform:rotate(180deg); }
 .note-frais-contenu { padding: 0 14px 16px; border-top:1px solid #edf1f5; }
 .note-frais-periode { margin:14px 2px 10px; color:var(--secondaire); font-size:13px; }
-.note-frais-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.note-frais-table { border-collapse:collapse; min-width:760px; width:100%; font-size:13px; }
-.note-frais-table th, .note-frais-table td { border:1px solid #dce5ef; padding:7px; text-align:center; }
-.note-frais-table th { background:var(--bleu-clair); color:var(--bleu); position:sticky; top:0; }
-.note-frais-table td:first-child { font-weight:750; white-space:nowrap; }
+.note-frais-table-wrap {
+    max-height: min(68vh, 620px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    border: 1px solid #dce5ef;
+    border-radius: 12px;
+    background: white;
+}
+.note-frais-table { border-collapse:separate; border-spacing:0; min-width:760px; width:100%; font-size:13px; }
+.note-frais-table th, .note-frais-table td {
+    border-right:1px solid #dce5ef;
+    border-bottom:1px solid #dce5ef;
+    padding:7px;
+    text-align:center;
+    background:white;
+}
+.note-frais-table th:first-child,
+.note-frais-table td:first-child { border-left:0; }
+.note-frais-table thead th {
+    background:var(--bleu-clair);
+    color:var(--bleu);
+    position:sticky;
+    top:0;
+    z-index:4;
+    box-shadow:0 2px 0 rgba(31,79,130,.12);
+}
+.note-frais-table td:first-child {
+    font-weight:750;
+    white-space:nowrap;
+}
+
+/* Première colonne figée, comme dans Excel. */
+.note-frais-table th:first-child,
+.note-frais-table td:first-child {
+    position: sticky;
+    left: 0;
+    min-width: 96px;
+    width: 96px;
+    background: #f7fbff;
+    box-shadow: 2px 0 0 rgba(31,79,130,.12);
+}
+
+/* Coin supérieur gauche : au-dessus de l’en-tête et de la colonne figée. */
+.note-frais-table thead th:first-child {
+    z-index: 7;
+    background: var(--bleu-clair);
+}
+
+/* Dates au-dessus des cellules ordinaires pendant le défilement horizontal. */
+.note-frais-table tbody td:first-child {
+    z-index: 2;
+}
+
+.note-frais-table tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: #f7fafc;
+    font-weight: 800;
+    color: var(--texte);
+    border-top: 2px solid #b9cbe0;
+    box-shadow: 0 -2px 8px rgba(31,79,130,.10);
+}
+.note-frais-table tfoot td.total-inactif {
+    color: transparent;
+    background: #f7fafc;
+}
+.note-frais-table tfoot td:first-child {
+    color: var(--bleu);
+    text-align:left;
+    padding-left:10px;
+    z-index: 6;
+    background: #eef5fc;
+}
 .note-frais-table input { margin:0; min-height:38px; padding:7px; font-size:14px; background:white; }
 .note-frais-table input[type="number"] { width:82px; }
 .note-frais-table .objet-jour { width:190px; }
@@ -1568,7 +1638,7 @@ if ("serviceWorker" in navigator) {
     window.addEventListener("load", async function() {
         try {
             const inscription = await navigator.serviceWorker.register(
-                "./service-worker.js?v=6",
+                "./service-worker.js?v=7",
                 { updateViaCache: "none" }
             );
 
@@ -4474,19 +4544,47 @@ function afficherNoteFrais() {
             Number(periode.finISO.slice(0,4)), Number(periode.finISO.slice(5,7))-1, Number(periode.finISO.slice(8,10))-1
         )));
     const dates = datesDePeriode(periode.debutISO, periode.finISO);
+    let totalKm = 0;
+    let totalRestauration = 0;
+    let totalHebergement = 0;
+    let totalPeage = 0;
+    let totalCarburant = 0;
+
     let html = '<table class="note-frais-table"><thead><tr><th>Date</th><th>KM</th><th>Restauration</th><th>Hébergement</th><th>Péage</th><th>Carburant</th><th>Lieu & objet</th><th>Code projet</th></tr></thead><tbody>';
     dates.forEach(function(dateISO) {
         const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
+        const kmJour = Number(manuel.km || 0);
+        const restaurationJour = totalJourCategorie(dateISO, "Restauration");
+        const hebergementJour = totalJourCategorie(dateISO, "Hébergements");
+        const peageJour = totalJourCategorie(dateISO, "Transport - Péage");
+        const carburantJour = totalJourCategorie(dateISO, "Divers - Carburant");
+
+        totalKm += kmJour;
+        totalRestauration += restaurationJour;
+        totalHebergement += hebergementJour;
+        totalPeage += peageJour;
+        totalCarburant += carburantJour;
+
         html += '<tr><td>' + formaterDateISO(dateISO).slice(0,5) + '</td>' +
             '<td><input type="number" min="0" step="1" inputmode="numeric" value="' + (manuel.km || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value)"></td>' +
-            '<td>' + formaterMontant(totalJourCategorie(dateISO, "Restauration")) + '</td>' +
-            '<td>' + formaterMontant(totalJourCategorie(dateISO, "Hébergements")) + '</td>' +
-            '<td>' + formaterMontant(totalJourCategorie(dateISO, "Transport - Péage")) + '</td>' +
-            '<td>' + formaterMontant(totalJourCategorie(dateISO, "Divers - Carburant")) + '</td>' +
+            '<td>' + formaterMontant(restaurationJour) + '</td>' +
+            '<td>' + formaterMontant(hebergementJour) + '</td>' +
+            '<td>' + formaterMontant(peageJour) + '</td>' +
+            '<td>' + formaterMontant(carburantJour) + '</td>' +
             '<td><input class="objet-jour" type="text" value="' + echapperHtml(manuel.objet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value)"></td>' +
             '<td><input class="code-projet-jour" type="text" value="' + echapperHtml(manuel.code_projet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value)"></td></tr>';
     });
-    html += '</tbody></table>';
+
+    html += '</tbody><tfoot><tr>' +
+        '<td>Totaux</td>' +
+        '<td>' + totalKm.toLocaleString("fr-FR") + '</td>' +
+        '<td>' + formaterMontant(totalRestauration) + '</td>' +
+        '<td>' + formaterMontant(totalHebergement) + '</td>' +
+        '<td>' + formaterMontant(totalPeage) + '</td>' +
+        '<td>' + formaterMontant(totalCarburant) + '</td>' +
+        '<td class="total-inactif">—</td>' +
+        '<td class="total-inactif">—</td>' +
+        '</tr></tfoot></table>';
     zone.innerHTML = html;
 }
 
