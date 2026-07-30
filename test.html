@@ -669,14 +669,6 @@ details.stockage .note {
     transform: translate(-50%, 0);
 }
 
-.popup-cloud.erreur {
-    width: min(620px, calc(100vw - 32px));
-    border-radius: 16px;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    line-height: 1.35;
-}
-
 .popup-cloud.succes {
     background: #26733a;
 }
@@ -1573,12 +1565,17 @@ window.addEventListener("online", async function() {
 });
 
 if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function() {
-        navigator.serviceWorker
-        .register("./service-worker.js")
-        .catch(function(erreur) {
+    window.addEventListener("load", async function() {
+        try {
+            const inscription = await navigator.serviceWorker.register(
+                "./service-worker.js?v=5",
+                { updateViaCache: "none" }
+            );
+
+            await inscription.update();
+        } catch (erreur) {
             console.log("Service worker indisponible :", erreur);
-        });
+        }
     });
 }
 
@@ -2817,55 +2814,6 @@ function avecDelaiMaximum(promise, millisecondes, message) {
     ]);
 }
 
-
-async function normaliserContenuUpload(contenu, nomEtape) {
-    if (contenu instanceof Blob) {
-        if (contenu.size <= 0) {
-            throw new Error(nomEtape + " est vide.");
-        }
-        return contenu;
-    }
-
-    if (contenu instanceof ArrayBuffer) {
-        if (contenu.byteLength <= 0) {
-            throw new Error(nomEtape + " est vide.");
-        }
-        return new Blob([contenu], { type: "image/jpeg" });
-    }
-
-    if (ArrayBuffer.isView(contenu)) {
-        if (contenu.byteLength <= 0) {
-            throw new Error(nomEtape + " est vide.");
-        }
-        return new Blob(
-            [contenu.buffer.slice(contenu.byteOffset, contenu.byteOffset + contenu.byteLength)],
-            { type: "image/jpeg" }
-        );
-    }
-
-    if (
-        typeof contenu === "string"
-        &&
-        contenu.startsWith("data:")
-    ) {
-        const reponse = await fetch(contenu);
-        const blob = await reponse.blob();
-
-        if (!blob.size) {
-            throw new Error(nomEtape + " est vide.");
-        }
-
-        return blob;
-    }
-
-    throw new Error(
-        nomEtape
-        + " n’est pas un fichier exploitable (type reçu : "
-        + Object.prototype.toString.call(contenu)
-        + ")."
-    );
-}
-
 async function envoyerTicketLocalVersCloud(ticket) {
     if (
         !utilisateurCloud
@@ -2875,24 +2823,13 @@ async function envoyerTicketLocalVersCloud(ticket) {
         return false;
     }
 
-    const pagesBrutes =
+    const pages =
         ticket.pages && ticket.pages.length
         ? ticket.pages
         : [ticket.photo];
 
-    if (!pagesBrutes.length || !pagesBrutes[0]) {
+    if (!pages.length || !pages[0]) {
         throw new Error("Le justificatif local ne contient plus de document.");
-    }
-
-    const pages = [];
-
-    for (let index = 0; index < pagesBrutes.length; index++) {
-        pages.push(
-            await normaliserContenuUpload(
-                pagesBrutes[index],
-                "La page " + (index + 1)
-            )
-        );
     }
 
     const dossier =
@@ -2932,21 +2869,18 @@ async function envoyerTicketLocalVersCloud(ticket) {
                 );
 
             if (error) {
-                throw error;
+                throw new Error(
+                    "Envoi de la page " + (index + 1) + " : "
+                    + (error.message || String(error))
+                );
             }
 
             cheminsPages.push(chemin);
             cheminsCrees.push(chemin);
         }
 
-        const vignetteCreee =
-            await creerVignetteBlob(pages[0]);
-
         const vignette =
-            await normaliserContenuUpload(
-                vignetteCreee || pages[0],
-                "L’aperçu"
-            );
+            await creerVignetteBlob(pages[0]);
 
         const cheminApercu =
             dossier + "/apercu.jpg";
@@ -2968,7 +2902,10 @@ async function envoyerTicketLocalVersCloud(ticket) {
             );
 
         if (erreurApercu) {
-            throw erreurApercu;
+            throw new Error(
+                "Envoi de l’aperçu : "
+                + (erreurApercu.message || String(erreurApercu))
+            );
         }
 
         cheminsCrees.push(cheminApercu);
@@ -2999,7 +2936,10 @@ async function envoyerTicketLocalVersCloud(ticket) {
             );
 
         if (erreurTable) {
-            throw erreurTable;
+            throw new Error(
+                "Enregistrement dans la table tickets : "
+                + (erreurTable.message || String(erreurTable))
+            );
         }
 
         await supprimerTicketLocalParId(ticket.id);
@@ -3009,14 +2949,14 @@ async function envoyerTicketLocalVersCloud(ticket) {
 
     } catch (erreur) {
         const detailErreur =
-            erreur && (erreur.message || erreur.error_description || erreur.details)
-            ? (erreur.message || erreur.error_description || erreur.details)
+            erreur && erreur.message
+            ? erreur.message
             : String(erreur || "Erreur inconnue");
 
         afficherPopupCloud(
-            "✕ Échec de l’envoi : " + detailErreur,
+            "✕ " + detailErreur,
             "erreur",
-            8000
+            9000
         );
 
         console.error("Envoi cloud :", erreur);

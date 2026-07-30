@@ -1,4 +1,4 @@
-const CACHE_NAME = "notes-de-frais-v4-ocr-hors-ligne";
+const CACHE_NAME = "notes-de-frais-v5-correction-cloud";
 
 const ASSETS = [
     "./",
@@ -79,7 +79,7 @@ self.addEventListener("fetch", function(event) {
 
     if (request.mode === "navigate") {
         event.respondWith(
-            fetch(request)
+            fetch(request, { cache: "no-store" })
             .then(function(response) {
                 const copie = response.clone();
                 caches.open(CACHE_NAME).then(function(cache) {
