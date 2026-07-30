@@ -756,7 +756,13 @@ details.stockage .note {
 .note-frais-table input[type="number"] { width:82px; }
 .note-frais-table .objet-jour { width:190px; }
 .note-frais-total { font-weight:800; background:#f7fafc; }
-.montant-ticket { font-weight:800; color:var(--bleu); }
+.montant-ticket {
+    font-weight: 800;
+    color: var(--bleu);
+    white-space: nowrap;
+    display: inline-block;
+    min-width: 105px;
+}
 
 
 </style>
@@ -3977,6 +3983,8 @@ function definirCelluleXml(documentXml, reference, valeur, typeTexte) {
 }
 
 async function creerFichierExcel(debut, fin, ticketsPeriode) {
+    // Le classeur original est conservé tel quel.
+    // Seules D6 et les valeurs B:G des lignes journalières sont modifiées.
     if (!window.JSZip) throw new Error("La bibliothèque Excel n'a pas pu être chargée.");
     const archive = await JSZip.loadAsync(base64VersUint8(MODELE_EXCEL_BASE64));
     const texteFeuille = await archive.file("xl/worksheets/sheet1.xml").async("string");
@@ -3987,7 +3995,8 @@ async function creerFichierExcel(debut, fin, ticketsPeriode) {
     dates.forEach(function(dateISO, index) {
         const ligne = 9 + index;
         const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "" };
-        definirCelluleXml(documentXml, "A" + ligne, numeroSerieExcel1904(dateISO), false);
+        // On conserve volontairement la colonne A du modèle :
+        // ses formules calculent les dates et sa mise en forme colore les week-ends.
         definirCelluleXml(documentXml, "B" + ligne, Number(manuel.km || 0), false);
         definirCelluleXml(documentXml, "C" + ligne, totalJourCategorie(dateISO, "Restauration"), false);
         definirCelluleXml(documentXml, "D" + ligne, totalJourCategorie(dateISO, "Hébergements"), false);
