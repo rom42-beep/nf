@@ -3030,13 +3030,24 @@ async function envoyerTicketLocalVersCloud(ticket) {
         return false;
     }
 
-    const pages =
+    const pagesBrutes =
         ticket.pages && ticket.pages.length
         ? ticket.pages
         : [ticket.photo];
 
-    if (!pages.length || !pages[0]) {
+    if (!pagesBrutes.length || !pagesBrutes[0]) {
         throw new Error("Le justificatif local ne contient plus de document.");
+    }
+
+    const pages = [];
+
+    for (let index = 0; index < pagesBrutes.length; index++) {
+        pages.push(
+            await convertirPagePourSupabase(
+                pagesBrutes[index],
+                index + 1
+            )
+        );
     }
 
     const dossier =
@@ -3065,9 +3076,9 @@ async function envoyerTicketLocalVersCloud(ticket) {
                     .from("justificatifs")
                     .upload(
                         chemin,
-                        pages[index],
+                        pages[index].donnees,
                         {
-                            contentType: "image/jpeg",
+                            contentType: pages[index].type,
                             upsert: false
                         }
                     ),
@@ -3076,15 +3087,30 @@ async function envoyerTicketLocalVersCloud(ticket) {
                 );
 
             if (error) {
-                throw error;
+                throw new Error(
+                    "Envoi de la page " + (index + 1)
+                    + " (" + pages[index].taille + " octets) : "
+                    + (error.message || String(error))
+                );
             }
 
             cheminsPages.push(chemin);
             cheminsCrees.push(chemin);
         }
 
-        const vignette =
-            await creerVignetteBlob(pages[0]);
+        const vignetteBlob =
+            await creerVignetteBlob(
+                new Blob(
+                    [pages[0].donnees],
+                    { type: pages[0].type }
+                )
+            );
+
+        const vignettePreparee =
+            await convertirPagePourSupabase(
+                vignetteBlob,
+                "aperçu"
+            );
 
         const cheminApercu =
             dossier + "/apercu.jpg";
@@ -3095,9 +3121,9 @@ async function envoyerTicketLocalVersCloud(ticket) {
                 .from("justificatifs")
                 .upload(
                     cheminApercu,
-                    vignette,
+                    vignettePreparee.donnees,
                     {
-                        contentType: "image/jpeg",
+                        contentType: vignettePreparee.type,
                         upsert: false
                     }
                 ),
@@ -3106,7 +3132,10 @@ async function envoyerTicketLocalVersCloud(ticket) {
             );
 
         if (erreurApercu) {
-            throw erreurApercu;
+            throw new Error(
+                "Envoi de l’aperçu : "
+                + (erreurApercu.message || String(erreurApercu))
+            );
         }
 
         cheminsCrees.push(cheminApercu);
@@ -3137,7 +3166,10 @@ async function envoyerTicketLocalVersCloud(ticket) {
             );
 
         if (erreurTable) {
-            throw erreurTable;
+            throw new Error(
+                "Enregistrement dans la table tickets : "
+                + (erreurTable.message || String(erreurTable))
+            );
         }
 
         await supprimerTicketLocalParId(ticket.id);
@@ -3146,10 +3178,15 @@ async function envoyerTicketLocalVersCloud(ticket) {
         return true;
 
     } catch (erreur) {
+        const detailErreur =
+            erreur && erreur.message
+            ? erreur.message
+            : String(erreur || "Erreur inconnue");
+
         afficherPopupCloud(
-            "✕ Échec de l’envoi",
+            "✕ " + detailErreur,
             "erreur",
-            4000
+            9000
         );
 
         console.error("Envoi cloud :", erreur);
@@ -3880,95 +3917,83 @@ async function sauvegarderModification() {
     ticketOuvert.periodeDebut = periode.debutISO;
     ticketOuvert.periodeFin = periode.finISO;
 
+    const valeurs = {
+        nom: nouveauNom,
+        date_ticket: nouvelleDate,
+        categorie: nouvelleCategorie,
+        periode_debut: periode.debutISO,
+        periode_fin: periode.finISO,
+        fichier: JSON.stringify({
+            pages: ticketOuvert.cloudPaths || [],
+            preview: ticketOuvert.cloudPreviewPath || "",
+            montant: Math.round(nouveauMontant * 100) / 100
+        })
+    };
+
     try {
         if (ticketOuvert.source === "local") {
             await modifierTicketLocal(ticketOuvert);
 
-        } else {
-            const valeurs = {
-                nom: nouveauNom,
-                date_ticket: nouvelleDate,
-                categorie: nouvelleCategorie,
-                periode_debut: periode.debutISO,
-                periode_fin: periode.finISO,
-                fichier: JSON.stringify({
-                    pages: ticketOuvert.cloudPaths || [],
-                    preview: ticketOuvert.cloudPreviewPath || "",
-                    montant: Math.round(nouveauMontant * 100) / 100
-                })
-            };
+        } else if (
+            utilisateurCloud
+            &&
+            navigator.onLine
+            &&
+            cloud
+        ) {
+            afficherPopupCloud("Enregistrement en cours…", "", 0);
 
-            if (
-                utilisateurCloud
-                &&
-                navigator.onLine
-            ) {
-                afficherPopupCloud("Enregistrement en cours…", "", 0);
+            /*
+             * Ne pas demander .select().single() après l'UPDATE :
+             * certaines politiques Supabase autorisent la modification mais
+             * ne renvoient pas la ligne, ce qui transformait un succès en erreur.
+             */
+            const { error } =
+                await cloud
+                .from("tickets")
+                .update(valeurs)
+                .eq("id", ticketOuvert.id)
+                .eq("user_id", utilisateurCloud.id);
 
-                const { data: ticketConfirme, error } =
-                    await cloud
-                    .from("tickets")
-                    .update(valeurs)
-                    .eq("id", ticketOuvert.id)
-                    .eq("user_id", utilisateurCloud.id)
-                    .select("id,nom,date_ticket,categorie,periode_debut,periode_fin,fichier")
-                    .single();
-
-                if (error) {
-                    throw error;
-                }
-
-                if (
-                    !ticketConfirme
-                    || String(ticketConfirme.nom || "") !== nouveauNom
-                    || String(ticketConfirme.date_ticket || "") !== nouvelleDate
-                    || String(ticketConfirme.categorie || "") !== nouvelleCategorie
-                ) {
-                    throw new Error(
-                        "Supabase n'a pas confirmé les nouvelles valeurs du justificatif."
-                    );
-                }
-
-                afficherPopupCloud("✓ Modification enregistrée", "succes", 1700);
-
-            } else {
-                await ajouterFileAttente({
-                    type: "update",
-                    cloudId: ticketOuvert.id,
-                    valeurs: valeurs,
-                    creeLe: Date.now()
-                });
+            if (error) {
+                throw error;
             }
+
+            afficherPopupCloud("✓ Modification enregistrée", "succes", 1700);
+
+        } else {
+            await ajouterFileAttente({
+                type: "update",
+                cloudId: ticketOuvert.id,
+                valeurs: valeurs,
+                creeLe: Date.now()
+            });
         }
 
         fermerFiche();
         await chargerTickets();
 
     } catch (erreur) {
-        console.error(erreur);
+        console.error("Modification justificatif :", erreur);
 
         if (ticketOuvert && ticketOuvert.source === "cloud") {
             await ajouterFileAttente({
                 type: "update",
                 cloudId: ticketOuvert.id,
-                valeurs: {
-                    nom: nouveauNom,
-                    date_ticket: nouvelleDate,
-                    categorie: nouvelleCategorie,
-                    periode_debut: periode.debutISO,
-                    periode_fin: periode.finISO,
-                    fichier: JSON.stringify({
-                        pages: ticketOuvert.cloudPaths || [],
-                        preview: ticketOuvert.cloudPreviewPath || "",
-                        montant: Math.round(nouveauMontant * 100) / 100
-                    })
-                },
+                valeurs: valeurs,
                 creeLe: Date.now()
             }).catch(function() {});
         }
 
-        alert(
-            "La modification a été gardée en attente et sera renvoyée au cloud dès que possible."
+        const detail =
+            erreur && (erreur.message || erreur.details || erreur.hint || erreur.code)
+            ? String(erreur.message || erreur.details || erreur.hint || erreur.code)
+            : "Erreur Supabase inconnue";
+
+        afficherPopupCloud(
+            "✕ Modification en attente — " + detail,
+            "erreur",
+            7000
         );
 
         fermerFiche();

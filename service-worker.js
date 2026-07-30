@@ -1,4 +1,4 @@
-const CACHE_NAME = "notes-de-frais-v13-sync-fix";
+const CACHE_NAME = "notes-de-frais-v14-ticket-sync";
 
 const ASSETS = [
     "./",
