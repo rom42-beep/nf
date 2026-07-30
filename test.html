@@ -748,13 +748,14 @@ details.stockage .note {
 .note-frais-contenu { padding: 0 14px 16px; border-top:1px solid #edf1f5; }
 .note-frais-periode { margin:14px 2px 10px; color:var(--secondaire); font-size:13px; }
 .note-frais-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.note-frais-table { border-collapse:collapse; min-width:760px; width:100%; font-size:13px; }
+.note-frais-table { border-collapse:collapse; min-width:900px; width:100%; font-size:13px; }
 .note-frais-table th, .note-frais-table td { border:1px solid #dce5ef; padding:7px; text-align:center; }
 .note-frais-table th { background:var(--bleu-clair); color:var(--bleu); position:sticky; top:0; }
 .note-frais-table td:first-child { font-weight:750; white-space:nowrap; }
 .note-frais-table input { margin:0; min-height:38px; padding:7px; font-size:14px; background:white; }
 .note-frais-table input[type="number"] { width:82px; }
 .note-frais-table .objet-jour { width:190px; }
+.note-frais-table .code-projet-jour { width:145px; }
 .note-frais-total { font-weight:800; background:#f7fafc; }
 .note-frais-statut { margin: 10px 2px 4px; font-weight: 700; }
 .note-frais-statut.ok { color:#26733a; }
@@ -3929,7 +3930,7 @@ function chargerDonneesJournalieres() {
     if (!localStorage.getItem("migrationNotesFraisCloudV1")) {
         Object.keys(donneesJournalieres).forEach(function(dateISO) {
             const ligne = donneesJournalieres[dateISO] || {};
-            if (Number(ligne.km || 0) !== 0 || String(ligne.objet || "").trim()) {
+            if (Number(ligne.km || 0) !== 0 || String(ligne.objet || "").trim() || String(ligne.code_projet || "").trim()) {
                 datesJournalieresEnAttente.add(dateISO);
             }
         });
@@ -3940,7 +3941,7 @@ function chargerDonneesJournalieres() {
 
 function sauverDonneeJournaliere(dateISO, champ, valeur) {
     if (!donneesJournalieres[dateISO]) {
-        donneesJournalieres[dateISO] = { km: 0, objet: "" };
+        donneesJournalieres[dateISO] = { km: 0, objet: "", code_projet: "" };
     }
 
     donneesJournalieres[dateISO][champ] =
@@ -3964,14 +3965,15 @@ function sauverDonneeJournaliere(dateISO, champ, valeur) {
 async function synchroniserDonneeJournaliere(dateISO) {
     if (!utilisateurCloud || !navigator.onLine || !cloud) return false;
 
-    const ligne = donneesJournalieres[dateISO] || { km: 0, objet: "" };
+    const ligne = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
     const km = Math.max(0, Math.round(Number(ligne.km || 0)));
     const objet = String(ligne.objet || "").trim();
+    const codeProjet = String(ligne.code_projet || "").trim();
 
     try {
         let erreur = null;
 
-        if (km === 0 && !objet) {
+        if (km === 0 && !objet && !codeProjet) {
             const resultat = await cloud
                 .from("notes_frais_journalieres")
                 .delete()
@@ -3985,7 +3987,8 @@ async function synchroniserDonneeJournaliere(dateISO) {
                     user_id: utilisateurCloud.id,
                     date_jour: dateISO,
                     km: km,
-                    objet: objet
+                    objet: objet,
+                    code_projet: codeProjet
                 }, {
                     onConflict: "user_id,date_jour",
                     ignoreDuplicates: false
@@ -3997,7 +4000,7 @@ async function synchroniserDonneeJournaliere(dateISO) {
 
         datesJournalieresEnAttente.delete(dateISO);
         enregistrerDonneesJournalieresLocalement();
-        afficherStatutNoteFrais("✓ Kilomètres et lieux sauvegardés dans le cloud", "ok");
+        afficherStatutNoteFrais("✓ Kilomètres, lieux et codes projet sauvegardés dans le cloud", "ok");
         return true;
 
     } catch (erreur) {
@@ -4031,7 +4034,7 @@ async function chargerDonneesJournalieresCloud() {
 
     const { data, error } = await cloud
         .from("notes_frais_journalieres")
-        .select("date_jour,km,objet,updated_at");
+        .select("date_jour,km,objet,code_projet,updated_at");
 
     if (error) throw error;
 
@@ -4041,7 +4044,8 @@ async function chargerDonneesJournalieresCloud() {
         if (!datesJournalieresEnAttente.has(dateISO)) {
             donneesJournalieres[dateISO] = {
                 km: Number(ligne.km || 0),
-                objet: String(ligne.objet || "")
+                objet: String(ligne.objet || ""),
+                code_projet: String(ligne.code_projet || "")
             };
         }
     });
@@ -4050,7 +4054,7 @@ async function chargerDonneesJournalieresCloud() {
     await synchroniserDonneesJournalieresEnAttente();
 
     if (!datesJournalieresEnAttente.size) {
-        afficherStatutNoteFrais("✓ Kilomètres et lieux synchronisés", "ok");
+        afficherStatutNoteFrais("✓ Kilomètres, lieux et codes projet synchronisés", "ok");
     }
 }
 
@@ -4083,16 +4087,17 @@ function afficherNoteFrais() {
             Number(periode.finISO.slice(0,4)), Number(periode.finISO.slice(5,7))-1, Number(periode.finISO.slice(8,10))-1
         )));
     const dates = datesDePeriode(periode.debutISO, periode.finISO);
-    let html = '<table class="note-frais-table"><thead><tr><th>Date</th><th>KM</th><th>Restauration</th><th>Hébergement</th><th>Péage</th><th>Carburant</th><th>Lieu & objet</th></tr></thead><tbody>';
+    let html = '<table class="note-frais-table"><thead><tr><th>Date</th><th>KM</th><th>Restauration</th><th>Hébergement</th><th>Péage</th><th>Carburant</th><th>Lieu & objet</th><th>Code projet</th></tr></thead><tbody>';
     dates.forEach(function(dateISO) {
-        const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "" };
+        const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
         html += '<tr><td>' + formaterDateISO(dateISO).slice(0,5) + '</td>' +
             '<td><input type="number" min="0" step="1" inputmode="numeric" value="' + (manuel.km || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value)"></td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Restauration")) + '</td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Hébergements")) + '</td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Transport - Péage")) + '</td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Divers - Carburant")) + '</td>' +
-            '<td><input class="objet-jour" type="text" value="' + echapperHtml(manuel.objet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value)"></td></tr>';
+            '<td><input class="objet-jour" type="text" value="' + echapperHtml(manuel.objet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value)"></td>' +
+            '<td><input class="code-projet-jour" type="text" value="' + echapperHtml(manuel.code_projet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value)"></td></tr>';
     });
     html += '</tbody></table>';
     zone.innerHTML = html;
