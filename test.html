@@ -1568,7 +1568,7 @@ if ("serviceWorker" in navigator) {
     window.addEventListener("load", async function() {
         try {
             const inscription = await navigator.serviceWorker.register(
-                "./service-worker.js?v=5",
+                "./service-worker.js?v=6",
                 { updateViaCache: "none" }
             );
 
@@ -2814,6 +2814,64 @@ function avecDelaiMaximum(promise, millisecondes, message) {
     ]);
 }
 
+
+async function convertirPagePourSupabase(contenu, numeroPage) {
+    let blob;
+
+    if (contenu instanceof Blob) {
+        blob = contenu;
+    } else if (contenu instanceof ArrayBuffer) {
+        blob = new Blob([contenu], { type: "image/jpeg" });
+    } else if (ArrayBuffer.isView(contenu)) {
+        blob = new Blob(
+            [
+                contenu.buffer.slice(
+                    contenu.byteOffset,
+                    contenu.byteOffset + contenu.byteLength
+                )
+            ],
+            { type: "image/jpeg" }
+        );
+    } else if (
+        typeof contenu === "string"
+        && contenu.startsWith("data:")
+    ) {
+        const reponse = await fetch(contenu);
+        blob = await reponse.blob();
+    } else {
+        throw new Error(
+            "La page " + numeroPage
+            + " a un format non reconnu : "
+            + Object.prototype.toString.call(contenu)
+        );
+    }
+
+    if (!blob || !blob.size) {
+        throw new Error(
+            "La page " + numeroPage + " est vide avant l’envoi."
+        );
+    }
+
+    /*
+    Sur Safari/iPhone, un Blob relu depuis IndexedDB peut être présent,
+    avec une taille correcte, mais produire une requête Storage vide.
+    On force donc sa lecture en mémoire et on transmet un Uint8Array.
+    */
+    const tampon = await blob.arrayBuffer();
+
+    if (!tampon.byteLength) {
+        throw new Error(
+            "La page " + numeroPage + " ne contient aucun octet."
+        );
+    }
+
+    return {
+        donnees: new Uint8Array(tampon),
+        taille: tampon.byteLength,
+        type: blob.type || "image/jpeg"
+    };
+}
+
 async function envoyerTicketLocalVersCloud(ticket) {
     if (
         !utilisateurCloud
@@ -2823,13 +2881,24 @@ async function envoyerTicketLocalVersCloud(ticket) {
         return false;
     }
 
-    const pages =
+    const pagesBrutes =
         ticket.pages && ticket.pages.length
         ? ticket.pages
         : [ticket.photo];
 
-    if (!pages.length || !pages[0]) {
+    if (!pagesBrutes.length || !pagesBrutes[0]) {
         throw new Error("Le justificatif local ne contient plus de document.");
+    }
+
+    const pages = [];
+
+    for (let index = 0; index < pagesBrutes.length; index++) {
+        pages.push(
+            await convertirPagePourSupabase(
+                pagesBrutes[index],
+                index + 1
+            )
+        );
     }
 
     const dossier =
@@ -2858,9 +2927,9 @@ async function envoyerTicketLocalVersCloud(ticket) {
                     .from("justificatifs")
                     .upload(
                         chemin,
-                        pages[index],
+                        pages[index].donnees,
                         {
-                            contentType: "image/jpeg",
+                            contentType: pages[index].type,
                             upsert: false
                         }
                     ),
@@ -2870,7 +2939,8 @@ async function envoyerTicketLocalVersCloud(ticket) {
 
             if (error) {
                 throw new Error(
-                    "Envoi de la page " + (index + 1) + " : "
+                    "Envoi de la page " + (index + 1)
+                    + " (" + pages[index].taille + " octets) : "
                     + (error.message || String(error))
                 );
             }
@@ -2879,8 +2949,19 @@ async function envoyerTicketLocalVersCloud(ticket) {
             cheminsCrees.push(chemin);
         }
 
-        const vignette =
-            await creerVignetteBlob(pages[0]);
+        const vignetteBlob =
+            await creerVignetteBlob(
+                new Blob(
+                    [pages[0].donnees],
+                    { type: pages[0].type }
+                )
+            );
+
+        const vignettePreparee =
+            await convertirPagePourSupabase(
+                vignetteBlob,
+                "aperçu"
+            );
 
         const cheminApercu =
             dossier + "/apercu.jpg";
@@ -2891,9 +2972,9 @@ async function envoyerTicketLocalVersCloud(ticket) {
                 .from("justificatifs")
                 .upload(
                     cheminApercu,
-                    vignette,
+                    vignettePreparee.donnees,
                     {
-                        contentType: "image/jpeg",
+                        contentType: vignettePreparee.type,
                         upsert: false
                     }
                 ),

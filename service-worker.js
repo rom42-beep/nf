@@ -1,4 +1,4 @@
-const CACHE_NAME = "notes-de-frais-v5-correction-cloud";
+const CACHE_NAME = "notes-de-frais-v6-upload-octets";
 
 const ASSETS = [
     "./",
