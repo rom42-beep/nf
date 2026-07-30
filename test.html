@@ -22,6 +22,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 
 <style>
 :root {
@@ -769,6 +770,50 @@ details.stockage .note {
 }
 
 
+
+/* Navigation principale */
+.navigation-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 14px 0 6px;
+}
+.navigation-sections button {
+    background: white;
+    border-color: #b9cbe0;
+    min-height: 58px;
+}
+.vue-section {
+    display: none;
+}
+.vue-section.active {
+    display: block;
+}
+.retour-section {
+    width: 100%;
+    margin: 4px 0 14px;
+    background: white;
+    border-color: #b9cbe0;
+}
+.bouton-annuler-ajout {
+    width: 100%;
+    margin-top: 12px;
+    color: var(--danger);
+    background: #fff3f2;
+    border-color: #ffd1cc;
+}
+.note-frais-table {
+    min-width: 900px;
+}
+.note-frais-table .code-projet-jour {
+    width: 130px;
+}
+@media (max-width: 520px) {
+    .navigation-sections {
+        grid-template-columns: 1fr;
+    }
+}
+
 </style>
 </head>
 
@@ -868,12 +913,74 @@ details.stockage .note {
                 ⛽ Divers - Carburant
             </button>
         </div>
+
+        <button class="bouton-annuler-ajout" onclick="annulerAjoutTicket()">✕ Annuler l’ajout</button>
     </div>
 
-    <h2>Mes justificatifs</h2>
-    <div id="liste"></div>
+    <div class="navigation-sections" id="navigationSections">
+        <button onclick="ouvrirSection('justificatifs')">🎟️ Mes justificatifs</button>
+        <button onclick="ouvrirSection('note-frais')">📊 Note de frais</button>
+    </div>
 
-    <details class="note-frais" open>
+    <section id="sectionJustificatifs" class="vue-section">
+        <button class="retour-section" onclick="fermerSections()">← Retour</button>
+        <h2>Mes justificatifs</h2>
+        <div id="liste"></div>
+
+        <!-- FILTRES regroupés avec les justificatifs -->
+        <details class="filtres">
+            <summary>🔎 Filtres</summary>
+
+            <div class="details-contenu">
+
+                <p><strong>Catégories</strong></p>
+
+                <div class="filtre-categories">
+                    <label>
+                        <input type="checkbox" class="filtreCategorie" value="Restauration">
+                        🍽️ Restauration
+                    </label>
+
+                    <label>
+                        <input type="checkbox" class="filtreCategorie" value="Hébergements">
+                        🏨 Hébergements
+                    </label>
+
+                    <label>
+                        <input type="checkbox" class="filtreCategorie" value="Transport - Péage">
+                        🚗 Transport - Péage
+                    </label>
+
+                    <label>
+                        <input type="checkbox" class="filtreCategorie" value="Divers - Carburant">
+                        ⛽ Divers - Carburant
+                    </label>
+                </div>
+
+                <p><strong>Date ou intervalle</strong></p>
+
+                <label for="filtreDateDebut">Du :</label>
+                <br>
+                <input type="date" id="filtreDateDebut">
+
+                <br>
+
+                <label for="filtreDateFin">Au :</label>
+                <br>
+                <input type="date" id="filtreDateFin">
+
+                <div class="actions-filtres">
+                    <button onclick="appliquerFiltres()">🔎 Appliquer</button>
+                    <button onclick="reinitialiserFiltres()">↩️ Réinitialiser</button>
+                </div>
+
+            </div>
+        </details>
+    </section>
+
+    <section id="sectionNoteFrais" class="vue-section">
+        <button class="retour-section" onclick="fermerSections()">← Retour</button>
+        <details class="note-frais" open>
         <summary>📊 Note de frais</summary>
         <div class="note-frais-contenu">
             <div id="noteFraisPeriode" class="note-frais-periode"></div>
@@ -881,57 +988,8 @@ details.stockage .note {
             <p class="note">Les frais sont additionnés automatiquement par jour. Les kilomètres et l’objet se saisissent manuellement et sont sauvegardés automatiquement.</p>
             <div id="noteFraisTableau" class="note-frais-table-wrap"></div>
         </div>
-    </details>
-
-    <!-- FILTRES : repliés par défaut pour garder l'interface épurée -->
-    <details class="filtres">
-        <summary>🔎 Filtres</summary>
-
-        <div class="details-contenu">
-
-            <p><strong>Catégories</strong></p>
-
-            <div class="filtre-categories">
-                <label>
-                    <input type="checkbox" class="filtreCategorie" value="Restauration">
-                    🍽️ Restauration
-                </label>
-
-                <label>
-                    <input type="checkbox" class="filtreCategorie" value="Hébergements">
-                    🏨 Hébergements
-                </label>
-
-                <label>
-                    <input type="checkbox" class="filtreCategorie" value="Transport - Péage">
-                    🚗 Transport - Péage
-                </label>
-
-                <label>
-                    <input type="checkbox" class="filtreCategorie" value="Divers - Carburant">
-                    ⛽ Divers - Carburant
-                </label>
-            </div>
-
-            <p><strong>Date ou intervalle</strong></p>
-
-            <label for="filtreDateDebut">Du :</label>
-            <br>
-            <input type="date" id="filtreDateDebut">
-
-            <br>
-
-            <label for="filtreDateFin">Au :</label>
-            <br>
-            <input type="date" id="filtreDateFin">
-
-            <div class="actions-filtres">
-                <button onclick="appliquerFiltres()">🔎 Appliquer</button>
-                <button onclick="reinitialiserFiltres()">↩️ Réinitialiser</button>
-            </div>
-
-        </div>
-    </details>
+        </details>
+    </section>
 
     <div class="export">
 
@@ -1848,6 +1906,7 @@ async function importerPdf(fichier) {
             : "PDF · " + pages.length + " pages";
 
         photoZone.style.display = "block";
+        analyserJustificatif(photoChoisie);
 
         if (documentPdf.cleanup) {
             documentPdf.cleanup();
@@ -2190,8 +2249,143 @@ function utiliserImageFinale(fichier) {
         ).offsetTop - 15,
         behavior: "smooth"
     });
+
+    analyserJustificatif(fichier);
 }
 
+
+
+function ouvrirSection(section) {
+    document.getElementById("sectionJustificatifs").classList.toggle("active", section === "justificatifs");
+    document.getElementById("sectionNoteFrais").classList.toggle("active", section === "note-frais");
+    document.getElementById("navigationSections").style.display = "none";
+    const cible = section === "justificatifs"
+        ? document.getElementById("sectionJustificatifs")
+        : document.getElementById("sectionNoteFrais");
+    window.scrollTo({ top: cible.offsetTop - 12, behavior: "smooth" });
+}
+
+function fermerSections() {
+    document.getElementById("sectionJustificatifs").classList.remove("active");
+    document.getElementById("sectionNoteFrais").classList.remove("active");
+    document.getElementById("navigationSections").style.display = "";
+    window.scrollTo({ top: document.getElementById("navigationSections").offsetTop - 12, behavior: "smooth" });
+}
+
+function annulerAjoutTicket() {
+    photoChoisie = null;
+    pagesChoisies = null;
+    document.getElementById("prisePhoto").value = "";
+    document.getElementById("importPhoto").value = "";
+    document.getElementById("dateTicket").value = "";
+    document.getElementById("nomTicket").value = "";
+    document.getElementById("montantTicket").value = "";
+    document.getElementById("apercu").removeAttribute("src");
+    document.getElementById("badgePdf").style.display = "none";
+    document.getElementById("badgePdf").textContent = "";
+    document.getElementById("photoZone").style.display = "none";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+let ocrEnCours = false;
+
+async function analyserJustificatif(fichier) {
+    if (!fichier || !window.Tesseract || ocrEnCours) return;
+    ocrEnCours = true;
+    try {
+        const worker = await Tesseract.createWorker(
+            "fra",
+            1,
+            {
+                workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
+                corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
+                langPath: "https://tessdata.projectnaptha.com/4.0.0_fast",
+                cacheMethod: "write"
+            }
+        );
+        const resultat = await worker.recognize(fichier);
+        await worker.terminate();
+        const texte = resultat && resultat.data ? String(resultat.data.text || "") : "";
+        const dateDetectee = detecterDateJustificatif(texte);
+        const montantDetecte = detecterMontantTTC(texte);
+        if (dateDetectee) document.getElementById("dateTicket").value = dateDetectee;
+        if (montantDetecte !== null) document.getElementById("montantTicket").value = montantDetecte.toFixed(2);
+    } catch (erreur) {
+        console.warn("Détection automatique indisponible :", erreur);
+    } finally {
+        ocrEnCours = false;
+    }
+}
+
+function detecterDateJustificatif(texte) {
+    const maintenant = new Date();
+    const anneeMax = maintenant.getFullYear() + 1;
+    const candidats = [];
+    const ajouter = function(jour, mois, annee, position) {
+        jour = Number(jour);
+        mois = Number(mois);
+        annee = Number(annee);
+        if (annee < 100) annee += annee >= 70 ? 1900 : 2000;
+        const date = new Date(annee, mois - 1, jour);
+        if (
+            annee >= 2000 && annee <= anneeMax &&
+            date.getFullYear() === annee &&
+            date.getMonth() === mois - 1 &&
+            date.getDate() === jour
+        ) {
+            candidats.push({ iso: dateVersISO(date), position: position });
+        }
+    };
+
+    let m;
+    const regexFr = /\b([0-3]?\d)[\/.\-]([01]?\d)[\/.\-](20\d{2}|\d{2})\b/g;
+    while ((m = regexFr.exec(texte)) !== null) ajouter(m[1], m[2], m[3], m.index);
+
+    const regexIso = /\b(20\d{2})[\/.\-]([01]?\d)[\/.\-]([0-3]?\d)\b/g;
+    while ((m = regexIso.exec(texte)) !== null) ajouter(m[3], m[2], m[1], m.index);
+
+    const mois = {
+        janvier:1, fevrier:2, février:2, mars:3, avril:4, mai:5, juin:6,
+        juillet:7, aout:8, août:8, septembre:9, octobre:10, novembre:11, decembre:12, décembre:12
+    };
+    const regexTexte = /\b([0-3]?\d)\s+(janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(20\d{2}|\d{2})\b/gi;
+    while ((m = regexTexte.exec(texte)) !== null) {
+        ajouter(m[1], mois[m[2].toLowerCase()], m[3], m.index);
+    }
+
+    return candidats.length ? candidats[0].iso : null;
+}
+
+function detecterMontantTTC(texte) {
+    const lignes = String(texte || "").split(/\r?\n/);
+    const motsPrioritaires = /(total\s*ttc|net\s*[àa]\s*payer|montant\s*[àa]\s*payer|total|ttc|carte|cb)/i;
+    const lireMontants = function(ligne) {
+        const valeurs = [];
+        const regex = /(?:€\s*)?(\d{1,5}(?:[ .]\d{3})*[\.,]\d{2})(?:\s*€)?/g;
+        let m;
+        while ((m = regex.exec(ligne)) !== null) {
+            const valeur = Number(m[1].replace(/ /g, "").replace(",", "."));
+            if (Number.isFinite(valeur) && valeur > 0 && valeur < 100000) valeurs.push(valeur);
+        }
+        return valeurs;
+    };
+
+    const prioritaires = [];
+    lignes.forEach(function(ligne, index) {
+        if (motsPrioritaires.test(ligne)) {
+            lireMontants(ligne).forEach(function(valeur) {
+                prioritaires.push({ valeur: valeur, index: index });
+            });
+        }
+    });
+    if (prioritaires.length) return prioritaires[prioritaires.length - 1].valeur;
+
+    const tous = [];
+    lignes.forEach(function(ligne) {
+        lireMontants(ligne).forEach(function(valeur) { tous.push(valeur); });
+    });
+    return tous.length ? Math.max.apply(null, tous) : null;
+}
 
 /* ========================================= */
 /* OUTILS CLOUD */
@@ -3929,7 +4123,7 @@ function chargerDonneesJournalieres() {
     if (!localStorage.getItem("migrationNotesFraisCloudV1")) {
         Object.keys(donneesJournalieres).forEach(function(dateISO) {
             const ligne = donneesJournalieres[dateISO] || {};
-            if (Number(ligne.km || 0) !== 0 || String(ligne.objet || "").trim()) {
+            if (Number(ligne.km || 0) !== 0 || String(ligne.objet || "").trim() || String(ligne.code_projet || "").trim()) {
                 datesJournalieresEnAttente.add(dateISO);
             }
         });
@@ -3940,7 +4134,7 @@ function chargerDonneesJournalieres() {
 
 function sauverDonneeJournaliere(dateISO, champ, valeur) {
     if (!donneesJournalieres[dateISO]) {
-        donneesJournalieres[dateISO] = { km: 0, objet: "" };
+        donneesJournalieres[dateISO] = { km: 0, objet: "", code_projet: "" };
     }
 
     donneesJournalieres[dateISO][champ] =
@@ -3964,14 +4158,15 @@ function sauverDonneeJournaliere(dateISO, champ, valeur) {
 async function synchroniserDonneeJournaliere(dateISO) {
     if (!utilisateurCloud || !navigator.onLine || !cloud) return false;
 
-    const ligne = donneesJournalieres[dateISO] || { km: 0, objet: "" };
+    const ligne = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
     const km = Math.max(0, Math.round(Number(ligne.km || 0)));
     const objet = String(ligne.objet || "").trim();
+    const codeProjet = String(ligne.code_projet || "").trim();
 
     try {
         let erreur = null;
 
-        if (km === 0 && !objet) {
+        if (km === 0 && !objet && !codeProjet) {
             const resultat = await cloud
                 .from("notes_frais_journalieres")
                 .delete()
@@ -3985,7 +4180,8 @@ async function synchroniserDonneeJournaliere(dateISO) {
                     user_id: utilisateurCloud.id,
                     date_jour: dateISO,
                     km: km,
-                    objet: objet
+                    objet: objet,
+                    code_projet: codeProjet
                 }, {
                     onConflict: "user_id,date_jour",
                     ignoreDuplicates: false
@@ -4031,7 +4227,7 @@ async function chargerDonneesJournalieresCloud() {
 
     const { data, error } = await cloud
         .from("notes_frais_journalieres")
-        .select("date_jour,km,objet,updated_at");
+        .select("date_jour,km,objet,code_projet,updated_at");
 
     if (error) throw error;
 
@@ -4041,7 +4237,8 @@ async function chargerDonneesJournalieresCloud() {
         if (!datesJournalieresEnAttente.has(dateISO)) {
             donneesJournalieres[dateISO] = {
                 km: Number(ligne.km || 0),
-                objet: String(ligne.objet || "")
+                objet: String(ligne.objet || ""),
+                code_projet: String(ligne.code_projet || "")
             };
         }
     });
@@ -4083,16 +4280,17 @@ function afficherNoteFrais() {
             Number(periode.finISO.slice(0,4)), Number(periode.finISO.slice(5,7))-1, Number(periode.finISO.slice(8,10))-1
         )));
     const dates = datesDePeriode(periode.debutISO, periode.finISO);
-    let html = '<table class="note-frais-table"><thead><tr><th>Date</th><th>KM</th><th>Restauration</th><th>Hébergement</th><th>Péage</th><th>Carburant</th><th>Lieu & objet</th></tr></thead><tbody>';
+    let html = '<table class="note-frais-table"><thead><tr><th>Date</th><th>KM</th><th>Restauration</th><th>Hébergement</th><th>Péage</th><th>Carburant</th><th>Lieu & objet</th><th>Code projet</th></tr></thead><tbody>';
     dates.forEach(function(dateISO) {
-        const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "" };
+        const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
         html += '<tr><td>' + formaterDateISO(dateISO).slice(0,5) + '</td>' +
             '<td><input type="number" min="0" step="1" inputmode="numeric" value="' + (manuel.km || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value)"></td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Restauration")) + '</td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Hébergements")) + '</td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Transport - Péage")) + '</td>' +
             '<td>' + formaterMontant(totalJourCategorie(dateISO, "Divers - Carburant")) + '</td>' +
-            '<td><input class="objet-jour" type="text" value="' + echapperHtml(manuel.objet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value)"></td></tr>';
+            '<td><input class="objet-jour" type="text" value="' + echapperHtml(manuel.objet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value)"></td>' +
+            '<td><input class="code-projet-jour" type="text" value="' + echapperHtml(manuel.code_projet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value)"></td></tr>';
     });
     html += '</tbody></table>';
     zone.innerHTML = html;
@@ -4194,7 +4392,7 @@ async function creerFichierExcel(debut, fin, ticketsPeriode) {
     const dates = datesDePeriode(debut, fin);
     dates.forEach(function(dateISO, index) {
         const ligne = 9 + index;
-        const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "" };
+        const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
         // On conserve volontairement la colonne A du modèle :
         // ses formules calculent les dates et sa mise en forme colore les week-ends.
         definirOuViderNombre(documentXml, "B" + ligne, manuel.km);
