@@ -669,10 +669,9 @@ details.stockage .note {
     transform: translate(-50%, 0);
 }
 
-/* Permet d'afficher le détail d'une erreur Supabase sans le tronquer. */
 .popup-cloud.erreur {
-    border-radius: 16px;
     width: min(620px, calc(100vw - 32px));
+    border-radius: 16px;
     white-space: normal;
     overflow-wrap: anywhere;
     line-height: 1.35;
@@ -2818,6 +2817,55 @@ function avecDelaiMaximum(promise, millisecondes, message) {
     ]);
 }
 
+
+async function normaliserContenuUpload(contenu, nomEtape) {
+    if (contenu instanceof Blob) {
+        if (contenu.size <= 0) {
+            throw new Error(nomEtape + " est vide.");
+        }
+        return contenu;
+    }
+
+    if (contenu instanceof ArrayBuffer) {
+        if (contenu.byteLength <= 0) {
+            throw new Error(nomEtape + " est vide.");
+        }
+        return new Blob([contenu], { type: "image/jpeg" });
+    }
+
+    if (ArrayBuffer.isView(contenu)) {
+        if (contenu.byteLength <= 0) {
+            throw new Error(nomEtape + " est vide.");
+        }
+        return new Blob(
+            [contenu.buffer.slice(contenu.byteOffset, contenu.byteOffset + contenu.byteLength)],
+            { type: "image/jpeg" }
+        );
+    }
+
+    if (
+        typeof contenu === "string"
+        &&
+        contenu.startsWith("data:")
+    ) {
+        const reponse = await fetch(contenu);
+        const blob = await reponse.blob();
+
+        if (!blob.size) {
+            throw new Error(nomEtape + " est vide.");
+        }
+
+        return blob;
+    }
+
+    throw new Error(
+        nomEtape
+        + " n’est pas un fichier exploitable (type reçu : "
+        + Object.prototype.toString.call(contenu)
+        + ")."
+    );
+}
+
 async function envoyerTicketLocalVersCloud(ticket) {
     if (
         !utilisateurCloud
@@ -2827,13 +2875,24 @@ async function envoyerTicketLocalVersCloud(ticket) {
         return false;
     }
 
-    const pages =
+    const pagesBrutes =
         ticket.pages && ticket.pages.length
         ? ticket.pages
         : [ticket.photo];
 
-    if (!pages.length || !pages[0]) {
+    if (!pagesBrutes.length || !pagesBrutes[0]) {
         throw new Error("Le justificatif local ne contient plus de document.");
+    }
+
+    const pages = [];
+
+    for (let index = 0; index < pagesBrutes.length; index++) {
+        pages.push(
+            await normaliserContenuUpload(
+                pagesBrutes[index],
+                "La page " + (index + 1)
+            )
+        );
     }
 
     const dossier =
@@ -2880,8 +2939,14 @@ async function envoyerTicketLocalVersCloud(ticket) {
             cheminsCrees.push(chemin);
         }
 
-        const vignette =
+        const vignetteCreee =
             await creerVignetteBlob(pages[0]);
+
+        const vignette =
+            await normaliserContenuUpload(
+                vignetteCreee || pages[0],
+                "L’aperçu"
+            );
 
         const cheminApercu =
             dossier + "/apercu.jpg";
