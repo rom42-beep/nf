@@ -3985,9 +3985,11 @@ async function synchroniserDonneeJournaliere(dateISO) {
                     user_id: utilisateurCloud.id,
                     date_jour: dateISO,
                     km: km,
-                    objet: objet,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: "user_id,date_jour" });
+                    objet: objet
+                }, {
+                    onConflict: "user_id,date_jour",
+                    ignoreDuplicates: false
+                });
             erreur = resultat.error;
         }
 
@@ -4000,7 +4002,16 @@ async function synchroniserDonneeJournaliere(dateISO) {
 
     } catch (erreur) {
         console.error("Sauvegarde note de frais :", erreur);
-        afficherStatutNoteFrais("Sauvegarde locale conservée — cloud à réessayer", "erreur");
+
+        const detailErreur =
+            erreur && (erreur.message || erreur.details || erreur.hint || erreur.code)
+            ? String(erreur.message || erreur.details || erreur.hint || erreur.code)
+            : "Erreur Supabase inconnue";
+
+        afficherStatutNoteFrais(
+            "Sauvegarde locale conservée — " + detailErreur,
+            "erreur"
+        );
         return false;
     }
 }
