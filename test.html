@@ -934,6 +934,59 @@ details.stockage .note {
     width: 130px;
 }
 
+.note-frais-table .cellule-sync {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+.note-frais-table .cellule-sync input {
+    padding-right: 27px;
+}
+
+.note-frais-table .cellule-sync-etat {
+    position: absolute;
+    top: 50%;
+    right: 7px;
+    transform: translateY(-50%);
+    width: 17px;
+    height: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+    opacity: .95;
+}
+
+.note-frais-table .cellule-sync-etat.vide {
+    display: none;
+}
+
+.note-frais-table .cellule-sync-etat.attente {
+    color: #8a5a00;
+    background: #fff4cc;
+}
+
+.note-frais-table .cellule-sync-etat.ok {
+    color: #26733a;
+    background: #eaf8ee;
+}
+
+.note-frais-table .cellule-sync-etat.erreur {
+    color: var(--danger);
+    background: #fff0ee;
+}
+
+.note-frais-table .cellule-sync-etat.hors-ligne {
+    color: #64748b;
+    background: #eef2f6;
+}
+
 /* Indicateur discret pendant l’analyse OCR */
 .ocr-chargement {
     display: none;
@@ -1154,7 +1207,7 @@ details.stockage .note {
         <div class="note-frais-contenu">
             <div id="noteFraisPeriode" class="note-frais-periode"></div>
             <div id="statutNoteFrais" class="note note-frais-statut">Sauvegarde locale prête</div>
-            <p class="note">Les frais sont additionnés automatiquement par jour. Les kilomètres et l’objet se saisissent manuellement et sont sauvegardés automatiquement.</p>
+            <p class="note">Les kilomètres, l’objet et le code projet sont enregistrés immédiatement dans le cloud à chaque modification.</p>
             <div id="noteFraisTableau" class="note-frais-table-wrap"></div>
         </div>
     </details>
@@ -1331,7 +1384,6 @@ let periodeDernierExport = null;
 let urlsPdf = [];
 let donneesJournalieres = {};
 let datesJournalieresEnAttente = new Set();
-let minuteursSauvegardeJournal = {};
 let erreurTableNotesDeFraisDejaAffichee = false;
 let versionsDonneesJournalieres = {};
 let filesSynchronisationJournal = {};
@@ -1641,7 +1693,7 @@ if ("serviceWorker" in navigator) {
     window.addEventListener("load", async function() {
         try {
             const inscription = await navigator.serviceWorker.register(
-                "./service-worker.js?v=8",
+                "./service-worker.js?v=10",
                 { updateViaCache: "none" }
             );
 
@@ -4412,40 +4464,99 @@ function recalculerTotalKmAffiche() {
     celluleTotalKm.textContent = total.toLocaleString("fr-FR");
 }
 
-function sauverDonneeJournaliere(dateISO, champ, valeur, synchroniserImmediatement) {
+
+function obtenirIdEtatCellule(dateISO, champ) {
+    return "sync-" + dateISO + "-" + champ;
+}
+
+function afficherEtatCellule(dateISO, champ, etat, texteAccessible) {
+    const element = document.getElementById(obtenirIdEtatCellule(dateISO, champ));
+    if (!element) return;
+
+    const configurations = {
+        attente: { symbole: "…", titre: "Enregistrement dans le cloud…" },
+        ok: { symbole: "✓", titre: "Synchronisé avec Supabase" },
+        erreur: { symbole: "!", titre: "Échec de la synchronisation cloud" },
+        "hors-ligne": { symbole: "○", titre: "Sauvegardé localement, en attente du cloud" },
+        vide: { symbole: "", titre: "" }
+    };
+
+    const configuration = configurations[etat] || configurations.vide;
+    element.className = "cellule-sync-etat " + etat;
+    element.textContent = configuration.symbole;
+    element.title = texteAccessible || configuration.titre;
+    element.setAttribute("aria-label", texteAccessible || configuration.titre);
+}
+
+function afficherEtatLigne(dateISO, etat, texteAccessible) {
+    ["km", "objet", "code_projet"].forEach(function(champ) {
+        const element = document.getElementById(obtenirIdEtatCellule(dateISO, champ));
+        if (
+            element
+            && (
+                etat !== "ok"
+                || element.classList.contains("attente")
+                || element.classList.contains("hors-ligne")
+                || element.classList.contains("erreur")
+            )
+        ) {
+            afficherEtatCellule(dateISO, champ, etat, texteAccessible);
+        }
+    });
+}
+
+function sauverDonneeJournaliere(dateISO, champ, valeur) {
     if (!donneesJournalieres[dateISO]) {
-        donneesJournalieres[dateISO] = { km: 0, objet: "", code_projet: "" };
+        donneesJournalieres[dateISO] = {
+            km: 0,
+            objet: "",
+            code_projet: ""
+        };
     }
 
     donneesJournalieres[dateISO][champ] =
         champ === "km"
-        ? Math.max(0, Math.round(Number(valeur || 0)))
-        : String(valeur ?? "");
+            ? Math.max(0, Math.round(Number(valeur || 0)))
+            : String(valeur ?? "");
 
     versionsDonneesJournalieres[dateISO] =
         Number(versionsDonneesJournalieres[dateISO] || 0) + 1;
 
     datesJournalieresEnAttente.add(dateISO);
+
+    /* Sauvegarde locale immédiate, y compris lorsqu'une valeur est effacée. */
     enregistrerDonneesJournalieresLocalement();
 
     if (champ === "km") {
         recalculerTotalKmAffiche();
     }
 
+    const etatCellule =
+        utilisateurCloud && navigator.onLine && cloud
+            ? "attente"
+            : "hors-ligne";
+
+    afficherEtatCellule(
+        dateISO,
+        champ,
+        etatCellule,
+        etatCellule === "attente"
+            ? "Enregistrement de cette case dans Supabase…"
+            : "Cette case est sauvegardée localement et attend la connexion"
+    );
+
     afficherStatutNoteFrais(
-        utilisateurCloud && navigator.onLine
-            ? "Sauvegarde cloud…"
+        etatCellule === "attente"
+            ? "Sauvegarde cloud immédiate…"
             : "Sauvegardé sur cet appareil — cloud en attente",
         "attente"
     );
 
-    clearTimeout(minuteursSauvegardeJournal[dateISO]);
-
-    const delai = synchroniserImmediatement ? 0 : 450;
-
-    minuteursSauvegardeJournal[dateISO] = setTimeout(function() {
-        mettreEnFileSynchronisationJournaliere(dateISO);
-    }, delai);
+    /*
+     * Chaque frappe/modification déclenche immédiatement une écriture Supabase.
+     * La file par date garantit que les écritures restent dans le bon ordre.
+     */
+    mettreEnFileSynchronisationJournaliere(dateISO);
 }
 
 function mettreEnFileSynchronisationJournaliere(dateISO) {
@@ -4480,7 +4591,14 @@ function mettreEnFileSynchronisationJournaliere(dateISO) {
 }
 
 async function synchroniserDonneeJournaliere(dateISO, versionEnvoyee) {
-    if (!utilisateurCloud || !navigator.onLine || !cloud) return false;
+    if (!utilisateurCloud || !navigator.onLine || !cloud) {
+        afficherEtatLigne(
+            dateISO,
+            "hors-ligne",
+            "Sauvegardé localement, en attente de la connexion Supabase"
+        );
+        return false;
+    }
 
     const ligne = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
     const km = Math.max(0, Math.round(Number(ligne.km || 0)));
@@ -4524,6 +4642,11 @@ async function synchroniserDonneeJournaliere(dateISO, versionEnvoyee) {
         ) {
             datesJournalieresEnAttente.delete(dateISO);
             enregistrerDonneesJournalieresLocalement();
+            afficherEtatLigne(
+                dateISO,
+                "ok",
+                "Synchronisé avec Supabase"
+            );
             afficherStatutNoteFrais(
                 "✓ Note de frais sauvegardée dans le cloud",
                 "ok"
@@ -4540,6 +4663,11 @@ async function synchroniserDonneeJournaliere(dateISO, versionEnvoyee) {
             ? String(erreur.message || erreur.details || erreur.hint || erreur.code)
             : "Erreur Supabase inconnue";
 
+        afficherEtatLigne(
+            dateISO,
+            "erreur",
+            "Échec Supabase : " + detailErreur
+        );
         afficherStatutNoteFrais(
             "Sauvegarde locale conservée — " + detailErreur,
             "erreur"
@@ -4638,13 +4766,13 @@ function afficherNoteFrais() {
         totalCarburant += carburantJour;
 
         html += '<tr><td>' + formaterDateISO(dateISO).slice(0,5) + '</td>' +
-            '<td><input data-champ="km" type="number" min="0" step="1" inputmode="numeric" value="' + (manuel.km || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value,false)" onchange="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value,true)" onblur="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value,true)"></td>' +
+            '<td><span class="cellule-sync"><input data-champ="km" type="number" min="0" step="1" inputmode="numeric" value="' + (manuel.km || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value)"><span id="sync-' + dateISO + '-km" class="cellule-sync-etat vide" aria-label=""></span></span></td>' +
             '<td>' + formaterMontant(restaurationJour) + '</td>' +
             '<td>' + formaterMontant(hebergementJour) + '</td>' +
             '<td>' + formaterMontant(peageJour) + '</td>' +
             '<td>' + formaterMontant(carburantJour) + '</td>' +
-            '<td><input class="objet-jour" type="text" value="' + echapperHtml(manuel.objet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value,false)" onchange="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value,true)" onblur="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value,true)"></td>' +
-            '<td><input class="code-projet-jour" type="text" value="' + echapperHtml(manuel.code_projet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value,false)" onchange="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value,true)" onblur="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value,true)"></td></tr>';
+            '<td><span class="cellule-sync"><input class="objet-jour" type="text" value="' + echapperHtml(manuel.objet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'objet\',this.value)"><span id="sync-' + dateISO + '-objet" class="cellule-sync-etat vide" aria-label=""></span></span></td>' +
+            '<td><span class="cellule-sync"><input class="code-projet-jour" type="text" value="' + echapperHtml(manuel.code_projet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value)"><span id="sync-' + dateISO + '-code_projet" class="cellule-sync-etat vide" aria-label=""></span></span></td></tr>';
     });
 
     html += '</tbody><tfoot><tr>' +
@@ -4661,25 +4789,6 @@ function afficherNoteFrais() {
 }
 
 
-window.addEventListener("pagehide", function() {
-    clearTimeoutsEtSynchroniserJournal();
-});
-
-document.addEventListener("visibilitychange", function() {
-    if (document.visibilityState === "hidden") {
-        clearTimeoutsEtSynchroniserJournal();
-    }
-});
-
-function clearTimeoutsEtSynchroniserJournal() {
-    Object.keys(minuteursSauvegardeJournal).forEach(function(dateISO) {
-        clearTimeout(minuteursSauvegardeJournal[dateISO]);
-    });
-
-    Array.from(datesJournalieresEnAttente).forEach(function(dateISO) {
-        mettreEnFileSynchronisationJournaliere(dateISO);
-    });
-}
 
 function echapperHtml(texte) {
     return String(texte || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
