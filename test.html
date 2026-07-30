@@ -825,6 +825,29 @@ details.stockage .note {
     box-shadow: none;
 }
 
+.menu-principal.export {
+    padding: 0;
+    border-top: 1px solid var(--bordure);
+}
+
+.menu-principal.export .menu-principal-contenu {
+    padding: 18px;
+}
+
+.stockage {
+    margin-top: 20px;
+    padding: 18px;
+}
+
+.stockage .details-contenu {
+    padding: 0;
+    border-top: 0;
+}
+
+.stockage h2 {
+    margin: 0 0 12px;
+}
+
 .bouton-annuler-ajout {
     width: 100%;
     margin-top: 12px;
@@ -875,6 +898,23 @@ details.stockage .note {
 
 @media (prefers-reduced-motion: reduce) {
     .ocr-roue { animation-duration: 1.6s; }
+}
+
+/* Le stockage reste visible en permanence. */
+.stockage .stockage-ligne {
+    font-size: 13px;
+    padding: 6px 0;
+}
+
+.stockage button {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 13px;
+}
+
+.stockage .note {
+    font-size: 11px;
+    margin-bottom: 0;
 }
 </style>
 </head>
@@ -1049,39 +1089,42 @@ details.stockage .note {
         </div>
     </details>
 
-    <div class="export">
+    <div class="separateur-sections" aria-hidden="true"></div>
 
-        <h2>📄 Extraire</h2>
+    <details class="menu-principal export" id="menuExtraire">
+        <summary>📄 Extraire</summary>
+        <div class="menu-principal-contenu">
 
-        <label for="periodeExport">Période à extraire :</label>
-        <br>
-        <select id="periodeExport"></select>
+            <label for="periodeExport">Période à extraire :</label>
+            <br>
+            <select id="periodeExport"></select>
 
-        <br>
+            <br>
 
-        <button id="boutonExtraire" onclick="extrairePeriode()">
-            📄 Extraire
-        </button>
-
-        <div id="statutExport"></div>
-
-        <div id="zonePdf">
-            <h3>Fichiers prêts</h3>
-
-            <div id="liensPdf"></div>
-
-            <button onclick="partagerPdfGeneres()">
-                ✉️ Partager / envoyer
+            <button id="boutonExtraire" onclick="extrairePeriode()">
+                📄 Extraire
             </button>
 
-            <button onclick="if(confirm('Êtes-vous sûr de vouloir supprimer cette période ?\n\nCette action est irréversible.')) nettoyerPeriodeExportee();">
-                🧹 Nettoyer cette période
-            </button>
+            <div id="statutExport"></div>
+
+            <div id="zonePdf">
+                <h3>Fichiers prêts</h3>
+
+                <div id="liensPdf"></div>
+
+                <button onclick="partagerPdfGeneres()">
+                    ✉️ Partager / envoyer
+                </button>
+
+                <button onclick="if(confirm('Êtes-vous sûr de vouloir supprimer cette période ?\n\nCette action est irréversible.')) nettoyerPeriodeExportee();">
+                    🧹 Nettoyer cette période
+                </button>
+            </div>
         </div>
-    </div>
+    </details>
 
-    <details class="stockage">
-        <summary>💾 Stockage</summary>
+    <div class="stockage">
+        <h2>💾 Stockage</h2>
 
         <div class="details-contenu">
 
@@ -1122,7 +1165,7 @@ details.stockage .note {
             </p>
 
         </div>
-    </details>
+    </div>
 
 </div>
 
