@@ -1693,7 +1693,7 @@ if ("serviceWorker" in navigator) {
     window.addEventListener("load", async function() {
         try {
             const inscription = await navigator.serviceWorker.register(
-                "./service-worker.js?v=10",
+                "./service-worker.js?v=11",
                 { updateViaCache: "none" }
             );
 
@@ -4475,7 +4475,7 @@ function afficherEtatCellule(dateISO, champ, etat, texteAccessible) {
 
     const configurations = {
         attente: { symbole: "…", titre: "Enregistrement dans le cloud…" },
-        ok: { symbole: "✓", titre: "Synchronisé avec Supabase" },
+        ok: { symbole: "✓", titre: "Enregistré et vérifié dans Supabase" },
         erreur: { symbole: "!", titre: "Échec de la synchronisation cloud" },
         "hors-ligne": { symbole: "○", titre: "Sauvegardé localement, en attente du cloud" },
         vide: { symbole: "", titre: "" }
@@ -4560,32 +4560,50 @@ function sauverDonneeJournaliere(dateISO, champ, valeur) {
 }
 
 function mettreEnFileSynchronisationJournaliere(dateISO) {
-    const fileExistante =
-        filesSynchronisationJournal[dateISO] || Promise.resolve();
+    /*
+     * Un seul worker par date. Tant qu'une nouvelle modification arrive,
+     * il recommence avec la version la plus récente.
+     */
+    if (filesSynchronisationJournal[dateISO]) {
+        return filesSynchronisationJournal[dateISO];
+    }
 
-    filesSynchronisationJournal[dateISO] = fileExistante
-        .catch(function() {
-            /* Une erreur précédente ne doit pas bloquer la prochaine écriture. */
-        })
-        .then(async function() {
-            let versionTraitee = -1;
+    filesSynchronisationJournal[dateISO] = (async function() {
+        try {
+            while (datesJournalieresEnAttente.has(dateISO)) {
+                const versionEnvoyee =
+                    Number(versionsDonneesJournalieres[dateISO] || 0);
 
-            while (
-                datesJournalieresEnAttente.has(dateISO)
-                && versionTraitee !== Number(versionsDonneesJournalieres[dateISO] || 0)
-            ) {
-                versionTraitee = Number(versionsDonneesJournalieres[dateISO] || 0);
                 const reussite = await synchroniserDonneeJournaliere(
                     dateISO,
-                    versionTraitee
+                    versionEnvoyee
                 );
 
                 if (!reussite) break;
+
+                const versionActuelle =
+                    Number(versionsDonneesJournalieres[dateISO] || 0);
+
+                if (versionActuelle === versionEnvoyee) {
+                    datesJournalieresEnAttente.delete(dateISO);
+                    enregistrerDonneesJournalieresLocalement();
+                    break;
+                }
             }
-        })
-        .finally(function() {
+        } finally {
             delete filesSynchronisationJournal[dateISO];
-        });
+
+            /*
+             * Une modification peut être arrivée entre la dernière vérification
+             * et la fermeture du worker : on relance alors immédiatement.
+             */
+            if (datesJournalieresEnAttente.has(dateISO)) {
+                Promise.resolve().then(function() {
+                    mettreEnFileSynchronisationJournaliere(dateISO);
+                });
+            }
+        }
+    })();
 
     return filesSynchronisationJournal[dateISO];
 }
@@ -4600,55 +4618,102 @@ async function synchroniserDonneeJournaliere(dateISO, versionEnvoyee) {
         return false;
     }
 
-    const ligne = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
-    const km = Math.max(0, Math.round(Number(ligne.km || 0)));
-    const objet = String(ligne.objet || "").trim();
-    const codeProjet = String(ligne.code_projet || "").trim();
+    /*
+     * Snapshot immuable : la requête et sa vérification portent exactement
+     * sur les mêmes valeurs, même si l'utilisateur continue de taper.
+     */
+    const source = donneesJournalieres[dateISO] || {
+        km: 0,
+        objet: "",
+        code_projet: ""
+    };
+
+    const attendu = {
+        km: Math.max(0, Math.round(Number(source.km || 0))),
+        objet: String(source.objet || "").trim(),
+        code_projet: String(source.code_projet || "").trim()
+    };
 
     try {
         let erreur = null;
 
-        if (km === 0 && !objet && !codeProjet) {
-            const resultat = await cloud
+        if (attendu.km === 0 && !attendu.objet && !attendu.code_projet) {
+            const resultatSuppression = await cloud
                 .from("notes_frais_journalieres")
                 .delete()
                 .eq("user_id", utilisateurCloud.id)
                 .eq("date_jour", dateISO);
-            erreur = resultat.error;
+
+            erreur = resultatSuppression.error;
+            if (erreur) throw erreur;
+
+            /*
+             * Vérification réelle : aucune ligne ne doit subsister.
+             */
+            const verificationSuppression = await cloud
+                .from("notes_frais_journalieres")
+                .select("date_jour")
+                .eq("user_id", utilisateurCloud.id)
+                .eq("date_jour", dateISO)
+                .maybeSingle();
+
+            if (verificationSuppression.error) {
+                throw verificationSuppression.error;
+            }
+
+            if (verificationSuppression.data) {
+                throw new Error(
+                    "Supabase n'a pas confirmé la suppression de cette ligne."
+                );
+            }
         } else {
-            const resultat = await cloud
+            const resultatEcriture = await cloud
                 .from("notes_frais_journalieres")
                 .upsert({
                     user_id: utilisateurCloud.id,
                     date_jour: dateISO,
-                    km: km,
-                    objet: objet,
-                    code_projet: codeProjet
+                    km: attendu.km,
+                    objet: attendu.objet,
+                    code_projet: attendu.code_projet
                 }, {
                     onConflict: "user_id,date_jour",
                     ignoreDuplicates: false
-                });
-            erreur = resultat.error;
-        }
+                })
+                .select("date_jour,km,objet,code_projet")
+                .single();
 
-        if (erreur) throw erreur;
+            erreur = resultatEcriture.error;
+            if (erreur) throw erreur;
+
+            const confirme = resultatEcriture.data;
+
+            if (
+                !confirme
+                || Number(confirme.km || 0) !== attendu.km
+                || String(confirme.objet || "") !== attendu.objet
+                || String(confirme.code_projet || "") !== attendu.code_projet
+            ) {
+                throw new Error(
+                    "La valeur relue dans Supabase ne correspond pas à la modification."
+                );
+            }
+        }
 
         const versionActuelle =
             Number(versionsDonneesJournalieres[dateISO] || 0);
 
-        if (
-            typeof versionEnvoyee !== "number"
-            || versionActuelle === versionEnvoyee
-        ) {
-            datesJournalieresEnAttente.delete(dateISO);
-            enregistrerDonneesJournalieresLocalement();
+        /*
+         * Le vert n'est affiché que si Supabase a renvoyé les bonnes valeurs
+         * ET qu'aucune frappe plus récente n'est encore en attente.
+         */
+        if (versionActuelle === versionEnvoyee) {
             afficherEtatLigne(
                 dateISO,
                 "ok",
-                "Synchronisé avec Supabase"
+                "Valeur enregistrée et vérifiée dans Supabase"
             );
             afficherStatutNoteFrais(
-                "✓ Note de frais sauvegardée dans le cloud",
+                "✓ Enregistrement vérifié dans le cloud",
                 "ok"
             );
         }
@@ -4660,8 +4725,8 @@ async function synchroniserDonneeJournaliere(dateISO, versionEnvoyee) {
 
         const detailErreur =
             erreur && (erreur.message || erreur.details || erreur.hint || erreur.code)
-            ? String(erreur.message || erreur.details || erreur.hint || erreur.code)
-            : "Erreur Supabase inconnue";
+                ? String(erreur.message || erreur.details || erreur.hint || erreur.code)
+                : "Erreur Supabase inconnue";
 
         afficherEtatLigne(
             dateISO,
@@ -4691,7 +4756,8 @@ async function chargerDonneesJournalieresCloud() {
 
     const { data, error } = await cloud
         .from("notes_frais_journalieres")
-        .select("date_jour,km,objet,code_projet,updated_at");
+        .select("date_jour,km,objet,code_projet,updated_at")
+        .eq("user_id", utilisateurCloud.id);
 
     if (error) throw error;
 
