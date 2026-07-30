@@ -1074,7 +1074,7 @@ details.stockage .note {
                 ✉️ Partager / envoyer
             </button>
 
-            <button onclick="nettoyerPeriodeExportee()">
+            <button onclick="if(confirm('Êtes-vous sûr de vouloir supprimer cette période ?\n\nCette action est irréversible.')) nettoyerPeriodeExportee();">
                 🧹 Nettoyer cette période
             </button>
         </div>
@@ -1094,15 +1094,19 @@ details.stockage .note {
             </div>
 
             <div class="stockage-ligne">
-                Utilisé : <strong id="stockageUtilise">Indisponible</strong>
+                Stockage local utilisé : <strong id="stockageUtilise">Indisponible</strong>
             </div>
 
             <div class="stockage-ligne">
-                Quota estimé : <strong id="stockageQuota">Indisponible</strong>
+                Supabase utilisé : <strong id="stockageSupabaseUtilise">Indisponible</strong>
             </div>
 
             <div class="stockage-ligne">
-                Persistant : <strong id="stockagePersistant">Inconnu</strong>
+                Supabase disponible : <strong id="stockageSupabaseRestant">Indisponible</strong>
+            </div>
+
+            <div class="stockage-ligne">
+                Stockage local persistant : <strong id="stockagePersistant">Inconnu</strong>
             </div>
 
             <button onclick="actualiserStockage()">
@@ -1114,7 +1118,7 @@ details.stockage .note {
             </button>
 
             <p class="note">
-                Le cache local sert uniquement aux justificatifs en attente. Les documents sauvegardés sont conservés dans le cloud privé.
+                Le stockage local correspond au cache de cette application sur l’appareil. La valeur Supabase correspond aux fichiers de justificatifs accessibles à ce compte, comparés au quota de 1 Go du forfait gratuit.
             </p>
 
         </div>
@@ -4240,7 +4244,7 @@ async function synchroniserDonneeJournaliere(dateISO) {
 
         datesJournalieresEnAttente.delete(dateISO);
         enregistrerDonneesJournalieresLocalement();
-        afficherStatutNoteFrais("✓ Kilomètres et lieux sauvegardés dans le cloud", "ok");
+        afficherStatutNoteFrais("✓ Note de frais sauvegardée dans le cloud", "ok");
         return true;
 
     } catch (erreur) {
@@ -4294,7 +4298,7 @@ async function chargerDonneesJournalieresCloud() {
     await synchroniserDonneesJournalieresEnAttente();
 
     if (!datesJournalieresEnAttente.size) {
-        afficherStatutNoteFrais("✓ Kilomètres et lieux synchronisés", "ok");
+        afficherStatutNoteFrais("✓ Note de frais synchronisée", "ok");
     }
 }
 
@@ -4474,6 +4478,12 @@ async function creerFichierExcel(debut, fin, ticketsPeriode) {
 /* EXTRACTION */
 /* ========================================= */
 
+function formaterDateNomFichier(dateISO) {
+    const morceaux = String(dateISO || "").split("-");
+    if (morceaux.length !== 3) return String(dateISO || "");
+    return morceaux[2] + "-" + morceaux[1];
+}
+
 async function extrairePeriode() {
 
     if (
@@ -4623,9 +4633,9 @@ async function extrairePeriode() {
             const nomFichier =
                 categorie.fichier +
                 "_" +
-                debut +
+                formaterDateNomFichier(debut) +
                 "_" +
-                fin +
+                formaterDateNomFichier(fin) +
                 ".pdf";
 
             const fichier =
@@ -4652,7 +4662,7 @@ async function extrairePeriode() {
         document.getElementById(
             "statutExport"
         ).textContent =
-            "✅ Les 4 PDF et le fichier Excel sont prêts.";
+            "✅ Les fichiers sont prêts.";
 
         await essayerPartageAutomatique();
 
@@ -5019,6 +5029,54 @@ function formaterOctets(octets) {
     );
 }
 
+const QUOTA_SUPABASE_GRATUIT = 1024 * 1024 * 1024;
+
+async function listerTousFichiersSupabase(dossier) {
+    const elements = [];
+    let offset = 0;
+    const limite = 100;
+
+    while (true) {
+        const { data, error } = await cloud.storage
+            .from("justificatifs")
+            .list(dossier, {
+                limit: limite,
+                offset: offset,
+                sortBy: { column: "name", order: "asc" }
+            });
+
+        if (error) throw error;
+        const lot = data || [];
+        elements.push(...lot);
+        if (lot.length < limite) break;
+        offset += limite;
+    }
+
+    return elements;
+}
+
+async function calculerStockageSupabaseUtilisateur() {
+    if (!cloud || !utilisateurCloud || !navigator.onLine) return null;
+
+    let total = 0;
+    const dossiers = await listerTousFichiersSupabase(utilisateurCloud.id);
+
+    for (const dossier of dossiers) {
+        if (dossier && dossier.id) {
+            total += Number(dossier.metadata && dossier.metadata.size || 0);
+            continue;
+        }
+
+        const cheminDossier = utilisateurCloud.id + "/" + dossier.name;
+        const fichiers = await listerTousFichiersSupabase(cheminDossier);
+        fichiers.forEach(function(fichier) {
+            total += Number(fichier && fichier.metadata && fichier.metadata.size || 0);
+        });
+    }
+
+    return total;
+}
+
 async function actualiserStockage() {
 
     document.getElementById(
@@ -5089,12 +5147,7 @@ async function actualiserStockage() {
                     estimation.usage
                 );
 
-            document.getElementById(
-                "stockageQuota"
-            ).textContent =
-                formaterOctets(
-                    estimation.quota
-                );
+
 
         } catch (erreur) {
 
@@ -5102,6 +5155,29 @@ async function actualiserStockage() {
                 "Estimation du stockage indisponible.",
                 erreur
             );
+        }
+    }
+
+    const supabaseUtiliseElement = document.getElementById("stockageSupabaseUtilise");
+    const supabaseRestantElement = document.getElementById("stockageSupabaseRestant");
+
+    if (!navigator.onLine || !utilisateurCloud || !cloud) {
+        supabaseUtiliseElement.textContent = "Connexion nécessaire";
+        supabaseRestantElement.textContent = "Connexion nécessaire";
+    } else {
+        try {
+            const utiliseSupabase = await calculerStockageSupabaseUtilisateur();
+            const restantSupabase = Math.max(0, QUOTA_SUPABASE_GRATUIT - utiliseSupabase);
+            const pourcentage = Math.min(100, (utiliseSupabase / QUOTA_SUPABASE_GRATUIT) * 100);
+
+            supabaseUtiliseElement.textContent =
+                formaterOctets(utiliseSupabase) + " sur 1 Go (" +
+                pourcentage.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %)";
+            supabaseRestantElement.textContent = formaterOctets(restantSupabase);
+        } catch (erreur) {
+            console.log("Stockage Supabase indisponible.", erreur);
+            supabaseUtiliseElement.textContent = "Indisponible";
+            supabaseRestantElement.textContent = "Indisponible";
         }
     }
 
