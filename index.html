@@ -758,11 +758,11 @@ details.stockage .note {
     border-radius: 12px;
     background: white;
 }
-.note-frais-table { border-collapse:separate; border-spacing:0; min-width:760px; width:100%; font-size:13px; }
+.note-frais-table { border-collapse:separate; border-spacing:0; min-width:610px; width:100%; font-size:12px; }
 .note-frais-table th, .note-frais-table td {
     border-right:1px solid #dce5ef;
     border-bottom:1px solid #dce5ef;
-    padding:7px;
+    padding:4px 3px;
     text-align:center;
     background:white;
 }
@@ -786,8 +786,8 @@ details.stockage .note {
 .note-frais-table td:first-child {
     position: sticky;
     left: 0;
-    min-width: 96px;
-    width: 96px;
+    min-width: 78px;
+    width: 78px;
     background: #f7fbff;
     box-shadow: 2px 0 0 rgba(31,79,130,.12);
 }
@@ -824,9 +824,9 @@ details.stockage .note {
     z-index: 6;
     background: #eef5fc;
 }
-.note-frais-table input { margin:0; min-height:38px; padding:7px; font-size:14px; background:white; }
-.note-frais-table input[type="number"] { width:82px; }
-.note-frais-table .objet-jour { width:190px; }
+.note-frais-table input { margin:0; min-height:34px; padding:5px; font-size:13px; background:white; }
+.note-frais-table input[type="number"] { width:52px; }
+.note-frais-table .objet-jour { width:118px; }
 .note-frais-total { font-weight:800; background:#f7fafc; }
 .note-frais-statut { margin: 10px 2px 4px; font-weight: 700; }
 .note-frais-statut.ok { color:#26733a; }
@@ -928,11 +928,30 @@ details.stockage .note {
 }
 
 .note-frais-table {
-    min-width: 900px;
+    min-width: 610px;
 }
 
+.note-frais-table th:nth-child(2),
+.note-frais-table td:nth-child(2) { min-width: 58px; width: 58px; }
+.note-frais-table th:nth-child(3),
+.note-frais-table td:nth-child(3),
+.note-frais-table th:nth-child(4),
+.note-frais-table td:nth-child(4),
+.note-frais-table th:nth-child(5),
+.note-frais-table td:nth-child(5),
+.note-frais-table th:nth-child(6),
+.note-frais-table td:nth-child(6) { min-width: 64px; white-space: nowrap; }
+.note-frais-table th:nth-child(7),
+.note-frais-table td:nth-child(7) { min-width: 124px; width: 124px; }
+.note-frais-table th:nth-child(8),
+.note-frais-table td:nth-child(8) { min-width: 88px; width: 88px; }
+.note-frais-date-jour,
+.note-frais-date-semaine { display:block; font-size:10px; line-height:1.05; color:var(--secondaire); font-weight:700; }
+.note-frais-date-valeur { display:block; line-height:1.15; }
+.note-frais-total-depenses { color:var(--bleu); font-weight:900; white-space:nowrap; }
+
 .note-frais-table .code-projet-jour {
-    width: 130px;
+    width: 82px;
 }
 
 .note-frais-table .cellule-sync {
@@ -1208,7 +1227,6 @@ details.stockage .note {
         <div class="note-frais-contenu">
             <div id="noteFraisPeriode" class="note-frais-periode"></div>
             <div id="statutNoteFrais" class="note note-frais-statut">Sauvegarde locale prête</div>
-            <p class="note">Les kilomètres, l’objet et le code projet sont enregistrés immédiatement dans le cloud à chaque modification.</p>
             <div id="noteFraisTableau" class="note-frais-table-wrap"></div>
         </div>
     </details>
@@ -1246,6 +1264,8 @@ details.stockage .note {
             </div>
         </div>
     </details>
+
+    <div class="separateur-sections" aria-hidden="true"></div>
 
     <div class="stockage">
         <h2>💾 Stockage</h2>
@@ -4730,6 +4750,21 @@ function datesDePeriode(debutISO, finISO) {
     return resultat;
 }
 
+function jourSemaineCourt(dateISO) {
+    const morceaux = dateISO.split("-").map(Number);
+    const date = new Date(morceaux[0], morceaux[1] - 1, morceaux[2]);
+    return ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."][date.getDay()];
+}
+
+function numeroSemaineISO(dateISO) {
+    const morceaux = dateISO.split("-").map(Number);
+    const date = new Date(Date.UTC(morceaux[0], morceaux[1] - 1, morceaux[2]));
+    const jour = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - jour);
+    const debutAnnee = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date - debutAnnee) / 86400000) + 1) / 7);
+}
+
 function totalJourCategorie(dateISO, categorie) {
     return tousLesTickets
         .filter(function(ticket) { return ticket.date === dateISO && ticket.categorie === categorie; })
@@ -4752,7 +4787,7 @@ function afficherNoteFrais() {
     let totalPeage = 0;
     let totalCarburant = 0;
 
-    let html = '<table class="note-frais-table"><thead><tr><th>Date</th><th>KM</th><th>Restauration</th><th>Hébergement</th><th>Péage</th><th>Carburant</th><th>Lieu & objet</th><th>Code projet</th></tr></thead><tbody>';
+    let html = '<table class="note-frais-table"><thead><tr><th>Date</th><th>KM</th><th>Resto</th><th>Héb.</th><th>Péage</th><th>Carb.</th><th>Objet</th><th>Projet</th></tr></thead><tbody>';
     dates.forEach(function(dateISO) {
         const manuel = donneesJournalieres[dateISO] || { km: 0, objet: "", code_projet: "" };
         const kmJour = Number(manuel.km || 0);
@@ -4767,7 +4802,7 @@ function afficherNoteFrais() {
         totalPeage += peageJour;
         totalCarburant += carburantJour;
 
-        html += '<tr><td>' + formaterDateISO(dateISO).slice(0,5) + '</td>' +
+        html += '<tr><td><span class="note-frais-date-jour">' + jourSemaineCourt(dateISO) + '</span><span class="note-frais-date-valeur">' + formaterDateISO(dateISO).slice(0,5) + '</span><span class="note-frais-date-semaine">S' + numeroSemaineISO(dateISO) + '</span></td>' +
             '<td><span class="cellule-sync"><input data-champ="km" type="number" min="0" step="1" inputmode="numeric" value="' + (manuel.km || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'km\',this.value)"><span id="sync-' + dateISO + '-km" class="cellule-sync-etat vide" aria-label=""></span></span></td>' +
             '<td>' + formaterMontant(restaurationJour) + '</td>' +
             '<td>' + formaterMontant(hebergementJour) + '</td>' +
@@ -4777,6 +4812,8 @@ function afficherNoteFrais() {
             '<td><span class="cellule-sync"><input class="code-projet-jour" type="text" value="' + echapperHtml(manuel.code_projet || "") + '" oninput="sauverDonneeJournaliere(\'' + dateISO + '\',\'code_projet\',this.value)"><span id="sync-' + dateISO + '-code_projet" class="cellule-sync-etat vide" aria-label=""></span></span></td></tr>';
     });
 
+    const totalDepenses = totalRestauration + totalHebergement + totalPeage + totalCarburant;
+
     html += '</tbody><tfoot><tr>' +
         '<td>Totaux</td>' +
         '<td id="noteFraisTotalKm">' + totalKm.toLocaleString("fr-FR") + '</td>' +
@@ -4784,8 +4821,8 @@ function afficherNoteFrais() {
         '<td>' + formaterMontant(totalHebergement) + '</td>' +
         '<td>' + formaterMontant(totalPeage) + '</td>' +
         '<td>' + formaterMontant(totalCarburant) + '</td>' +
-        '<td class="total-inactif">—</td>' +
-        '<td class="total-inactif">—</td>' +
+        '<td class="note-frais-total-depenses">Dépenses</td>' +
+        '<td class="note-frais-total-depenses">' + formaterMontant(totalDepenses) + '</td>' +
         '</tr></tfoot></table>';
     zone.innerHTML = html;
 }
