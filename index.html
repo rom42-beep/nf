@@ -3359,6 +3359,24 @@ async function traiterFileAttente() {
                 }
             }
 
+            if (action.type === "delete_journal_period") {
+                if (!action.debut || !action.fin) {
+                    throw new Error("Période de note de frais invalide.");
+                }
+
+                const { error } =
+                    await cloud
+                    .from("notes_frais_journalieres")
+                    .delete()
+                    .eq("user_id", utilisateurCloud.id)
+                    .gte("date_jour", action.debut)
+                    .lt("date_jour", action.fin);
+
+                if (error) {
+                    throw error;
+                }
+            }
+
             await supprimerActionAttente(action.id);
 
         } catch (erreur) {
@@ -5634,37 +5652,85 @@ function proposerNettoyage() {
 /* NETTOYER PÉRIODE */
 /* ========================================= */
 
+async function supprimerDonneesJournalieresPeriode(debut, fin) {
+    const dates = datesDePeriode(debut, fin);
+
+    if (utilisateurCloud && navigator.onLine && cloud) {
+        const { error } =
+            await cloud
+            .from("notes_frais_journalieres")
+            .delete()
+            .eq("user_id", utilisateurCloud.id)
+            .gte("date_jour", debut)
+            .lt("date_jour", fin);
+
+        if (error) {
+            throw error;
+        }
+    } else if (db) {
+        await ajouterFileAttente({
+            type: "delete_journal_period",
+            debut: debut,
+            fin: fin,
+            creeLe: Date.now()
+        });
+    }
+
+    dates.forEach(function(dateISO) {
+        delete donneesJournalieres[dateISO];
+        datesJournalieresEnAttente.delete(dateISO);
+        clearTimeout(minuteursSauvegardeJournal[dateISO]);
+        delete minuteursSauvegardeJournal[dateISO];
+    });
+
+    enregistrerDonneesJournalieresLocalement();
+}
+
 async function nettoyerPeriodeExportee() {
     if (!periodeDernierExport) {
         alert("Aucune période n'a encore été extraite.");
         return;
     }
 
+    const debut = periodeDernierExport.debut;
+    const fin = periodeDernierExport.fin;
+
     const ticketsASupprimer =
         tousLesTickets.filter(
             function(ticket) {
                 return (
-                    ticket.periodeDebut === periodeDernierExport.debut
+                    ticket.periodeDebut === debut
                     &&
-                    ticket.periodeFin === periodeDernierExport.fin
+                    ticket.periodeFin === fin
                 );
             }
         );
 
-    if (ticketsASupprimer.length === 0) {
+    const dates = datesDePeriode(debut, fin);
+    const donneesJournalieresPresentes = dates.some(function(dateISO) {
+        const ligne = donneesJournalieres[dateISO];
+        return ligne
+            && (
+                Number(ligne.km || 0) !== 0
+                || String(ligne.objet || "").trim()
+                || String(ligne.code_projet || "").trim()
+            );
+    });
+
+    if (ticketsASupprimer.length === 0 && !donneesJournalieresPresentes) {
         alert("Cette période est déjà vide.");
         return;
     }
 
     const confirmation =
         confirm(
-            "Supprimer définitivement les "
-            + ticketsASupprimer.length
-            + " justificatif(s) de la période "
-            + formaterDateISO(periodeDernierExport.debut)
+            "Supprimer définitivement TOUTES les données de la période "
+            + formaterDateISO(debut)
             + " → "
-            + formaterDateISO(periodeDernierExport.fin)
-            + " du cloud ?"
+            + formaterDateISO(fin)
+            + " ?\n\n"
+            + ticketsASupprimer.length
+            + " justificatif(s) et les données de la note de frais (KM, objet, projet) seront supprimés."
         );
 
     if (!confirmation) {
@@ -5681,6 +5747,8 @@ async function nettoyerPeriodeExportee() {
             await supprimerTicketSansConfirmation(ticket);
         }
 
+        await supprimerDonneesJournalieresPeriode(debut, fin);
+
         fichiersPdfGeneres = [];
         periodeDernierExport = null;
 
@@ -5695,15 +5763,16 @@ async function nettoyerPeriodeExportee() {
 
         document.getElementById("statutExport").textContent =
             navigator.onLine
-            ? "✅ Période supprimée du cloud."
-            : "⏳ Suppression mise en attente.";
+            ? "✅ Toutes les données de la période ont été supprimées."
+            : "⏳ Données locales supprimées ; suppression cloud mise en attente.";
 
+        afficherNoteFrais();
         await chargerTickets();
 
     } catch (erreur) {
         console.error(erreur);
         alert(
-            "Une partie de la période n'a pas pu être supprimée. Rien d'autre ne sera effacé tant que la connexion n'est pas revenue."
+            "La suppression complète de la période n'a pas pu être terminée. Les données restantes n'ont pas été effacées."
         );
         await chargerTickets();
     }
