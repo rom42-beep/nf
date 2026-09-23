@@ -5516,110 +5516,146 @@ function afficherPdfGeneres() {
 /* PARTAGE */
 /* ========================================= */
 
-async function essayerPartageAutomatique() {
-
-    if (!navigator.share) {
-        return;
+async function creerZipPartage() {
+    if (!window.JSZip) {
+        throw new Error("La bibliothèque ZIP n'est pas disponible.");
     }
 
-    if (
-        navigator.canShare
-        &&
-        !navigator.canShare({
-            files:
-                fichiersPdfGeneres
-        })
-    ) {
-        return;
+    if (!fichiersPdfGeneres.length) {
+        throw new Error("Aucun fichier à partager.");
     }
+
+    const archive = new JSZip();
+
+    fichiersPdfGeneres.forEach(function(fichier) {
+        archive.file(fichier.name, fichier);
+    });
+
+    const blob = await archive.generateAsync({
+        type: "blob",
+        compression: "DEFLATE"
+    });
+
+    const nomPeriode =
+        periodeDernierExport
+        ? "_" +
+          formaterDateNomFichier(periodeDernierExport.debut) +
+          "_" +
+          formaterDateNomFichier(periodeDernierExport.fin)
+        : "";
+
+    return new File(
+        [blob],
+        "Notes-de-frais" + nomPeriode + ".zip",
+        { type: "application/zip" }
+    );
+}
+
+async function partagerFichiersGeneres(tenterAutomatiquement) {
+    if (!navigator.share || !fichiersPdfGeneres.length) {
+        return false;
+    }
+
+    const optionsPartage = {
+        title: "Notes de frais",
+        text: periodeDernierExport
+            ? "Notes de frais " +
+              formaterDateISO(periodeDernierExport.debut) +
+              " → " +
+              formaterDateISO(periodeDernierExport.fin)
+            : "Notes de frais"
+    };
 
     try {
-
-        await navigator.share({
-            title:
-                "Notes de frais",
-            text:
-                "Notes de frais " +
-                formaterDateISO(
-                    periodeDernierExport.debut
-                )
-                +
-                " → "
-                +
-                formaterDateISO(
-                    periodeDernierExport.fin
-                ),
-            files:
-                fichiersPdfGeneres
-        });
+        /*
+         * Ne bloque pas le partage uniquement parce que navigator.canShare()
+         * répond faux : certains navigateurs refusent un type de fichier
+         * particulier avec canShare(), tout en acceptant le partage réel.
+         */
+        await navigator.share(
+            Object.assign(
+                {},
+                optionsPartage,
+                { files: fichiersPdfGeneres }
+            )
+        );
 
         proposerNettoyage();
+        return true;
 
-    } catch (erreur) {
-
+    } catch (erreurFichiers) {
         console.log(
-            "Partage annulé ou indisponible.",
-            erreur
+            "Partage direct des fichiers impossible, tentative ZIP :",
+            erreurFichiers
         );
+
+        /*
+         * Fallback : un seul ZIP contenant tous les documents.
+         * Cela permet notamment de partager le CRA .xlsm même lorsque
+         * le navigateur refuse ce type de fichier dans un partage multiple.
+         */
+        try {
+            const zip = await creerZipPartage();
+
+            await navigator.share(
+                Object.assign(
+                    {},
+                    optionsPartage,
+                    {
+                        files: [zip],
+                        text: (optionsPartage.text || "Notes de frais") +
+                            " — documents regroupés dans un ZIP"
+                    }
+                )
+            );
+
+            proposerNettoyage();
+            return true;
+
+        } catch (erreurZip) {
+            console.log(
+                tenterAutomatiquement
+                    ? "Partage automatique indisponible."
+                    : "Partage direct et partage ZIP indisponibles.",
+                erreurZip
+            );
+            return false;
+        }
     }
 }
 
+async function essayerPartageAutomatique() {
+    if (!navigator.share || !fichiersPdfGeneres.length) {
+        return;
+    }
+
+    /*
+     * Le partage automatique peut être refusé par le navigateur car il
+     * n'est pas déclenché directement par un geste utilisateur.
+     * Dans ce cas, le bouton manuel reste disponible.
+     */
+    await partagerFichiersGeneres(true);
+}
+
 async function partagerPdfGeneres() {
-
-    if (
-        fichiersPdfGeneres.length ===
-        0
-    ) {
-
-        alert(
-            "Commence par créer les fichiers."
-        );
-
+    if (!fichiersPdfGeneres.length) {
+        alert("Commence par créer les fichiers.");
         return;
     }
 
     if (!navigator.share) {
-
         alert(
-            "Le partage direct n'est pas disponible ici. Utilise les liens PDF affichés."
+            "Le partage direct n'est pas disponible ici. Utilise les liens des fichiers affichés."
         );
-
         return;
     }
 
-    if (
-        navigator.canShare
-        &&
-        !navigator.canShare({
-            files:
-                fichiersPdfGeneres
-        })
-    ) {
+    const partageReussi = await partagerFichiersGeneres(false);
 
+    if (!partageReussi) {
         alert(
-            "Ce navigateur ne permet pas de partager directement ces fichiers. Utilise les liens PDF."
-        );
-
-        return;
-    }
-
-    try {
-
-        await navigator.share({
-            title:
-                "Notes de frais",
-            text:
-                "Notes de frais",
-            files:
-                fichiersPdfGeneres
-        });
-
-        proposerNettoyage();
-
-    } catch (erreur) {
-
-        console.log(
-            erreur
+            "Le partage direct n'est pas disponible avec ce navigateur. " +
+            "Les liens des fichiers restent disponibles juste au-dessus."
         );
     }
 }
