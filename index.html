@@ -748,7 +748,39 @@ details.stockage .note {
 .note-frais > summary::after { content:"⌄"; color:var(--bleu); font-size:22px; }
 .note-frais[open] > summary::after { transform:rotate(180deg); }
 .note-frais-contenu { padding: 0 14px 16px; border-top:1px solid #edf1f5; }
-.note-frais-periode { margin:14px 2px 10px; color:var(--secondaire); font-size:13px; }
+.note-frais-selection {
+    margin: 8px 2px 12px;
+    position: relative;
+}
+.note-frais-selection::after {
+    content: "⌄";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--bleu);
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+}
+.note-frais-selection select {
+    margin: 0;
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 34px 8px 10px;
+    border: 1px solid #dce5ef;
+    border-radius: 10px;
+    background: #f7fbff;
+    color: var(--bleu);
+    font-size: 13px;
+    font-weight: 750;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.note-frais-selection select:focus {
+    outline: 2px solid rgba(31,79,130,.18);
+    border-color: var(--bleu);
+}
 .note-frais-table-wrap {
     max-height: min(68vh, 620px);
     overflow: auto;
@@ -1229,7 +1261,9 @@ details.stockage .note {
     <details class="menu-principal note-frais" id="menuNoteFrais">
         <summary>📊 Note de frais</summary>
         <div class="note-frais-contenu">
-            <div id="noteFraisPeriode" class="note-frais-periode"></div>
+            <div class="note-frais-selection">
+                <select id="periodeNoteFrais" aria-label="Choisir la période de la note de frais" onchange="changerPeriodeNoteFrais(this.value)"></select>
+            </div>
             <div id="statutNoteFrais" class="note note-frais-statut">Sauvegarde locale prête</div>
             <div id="noteFraisTableau" class="note-frais-table-wrap"></div>
         </div>
@@ -1408,6 +1442,7 @@ let fichiersPdfGeneres = [];
 let periodeDernierExport = null;
 let urlsPdf = [];
 let donneesJournalieres = {};
+let periodeNoteFraisSelectionnee = null;
 let datesJournalieresEnAttente = new Set();
 let erreurTableNotesDeFraisDejaAffichee = false;
 let minuteursSauvegardeJournal = {};
@@ -3574,6 +3609,12 @@ async function chargerTickets() {
         }
 
         remplirPeriodesExport();
+        try {
+            periodeNoteFraisSelectionnee = localStorage.getItem("periodeNoteFraisSelectionnee") || null;
+        } catch (erreur) {
+            periodeNoteFraisSelectionnee = null;
+        }
+        remplirPeriodesNoteFrais();
         actualiserCompteurPeriodeActuelle();
         afficherTickets(tousLesTickets);
         afficherNoteFrais();
@@ -4777,15 +4818,105 @@ function totalJourCategorie(dateISO, categorie) {
         .reduce(function(total, ticket) { return total + Number(ticket.montant || 0); }, 0);
 }
 
+function clePeriode(debutISO, finISO) {
+    return debutISO + "|" + finISO;
+}
+
+function construirePeriodesNoteFrais() {
+    const periodes = new Map();
+    const ajouterDate = function(dateISO) {
+        if (!dateISO) return;
+        const periode = calculerPeriode(dateISO);
+        const cle = clePeriode(periode.debutISO, periode.finISO);
+        if (!periodes.has(cle)) {
+            periodes.set(cle, periode);
+        }
+    };
+
+    tousLesTickets.forEach(function(ticket) {
+        ajouterDate(ticket.date);
+    });
+
+    Object.keys(donneesJournalieres || {}).forEach(function(dateISO) {
+        const ligne = donneesJournalieres[dateISO] || {};
+        if (Number(ligne.km || 0) !== 0 || String(ligne.objet || "").trim() || String(ligne.code_projet || "").trim()) {
+            ajouterDate(dateISO);
+        }
+    });
+
+    /* Toujours proposer la période actuelle, même lorsqu'elle est vide. */
+    const periodeActuelle = calculerPeriode();
+    periodes.set(
+        clePeriode(periodeActuelle.debutISO, periodeActuelle.finISO),
+        periodeActuelle
+    );
+
+    return Array.from(periodes.values()).sort(function(a, b) {
+        return b.debutISO.localeCompare(a.debutISO);
+    });
+}
+
+function remplirPeriodesNoteFrais() {
+    const select = document.getElementById("periodeNoteFrais");
+    if (!select) return;
+
+    const cleAvant = periodeNoteFraisSelectionnee || select.value;
+    const periodes = construirePeriodesNoteFrais();
+    select.innerHTML = "";
+
+    periodes.forEach(function(periode) {
+        const option = document.createElement("option");
+        option.value = clePeriode(periode.debutISO, periode.finISO);
+        option.textContent = "Du " + periode.debutAffichage + " au " + formaterDateISO(
+            dateVersISO(new Date(
+                Number(periode.finISO.slice(0, 4)),
+                Number(periode.finISO.slice(5, 7)) - 1,
+                Number(periode.finISO.slice(8, 10)) - 1
+            ))
+        );
+        select.appendChild(option);
+    });
+
+    const periodeActuelle = calculerPeriode();
+    const cleActuelle = clePeriode(periodeActuelle.debutISO, periodeActuelle.finISO);
+    const valeur = periodes.some(function(periode) {
+        return clePeriode(periode.debutISO, periode.finISO) === cleAvant;
+    }) ? cleAvant : cleActuelle;
+
+    select.value = valeur;
+    periodeNoteFraisSelectionnee = valeur;
+}
+
+function changerPeriodeNoteFrais(valeur) {
+    periodeNoteFraisSelectionnee = valeur || null;
+    try {
+        localStorage.setItem("periodeNoteFraisSelectionnee", periodeNoteFraisSelectionnee || "");
+    } catch (erreur) {}
+    afficherNoteFrais();
+}
+
+function obtenirPeriodeNoteFraisSelectionnee() {
+    const select = document.getElementById("periodeNoteFrais");
+    const valeur = periodeNoteFraisSelectionnee || (select && select.value) || "";
+    if (!valeur) return calculerPeriode();
+
+    const morceaux = valeur.split("|");
+    if (morceaux.length !== 2) return calculerPeriode();
+
+    return {
+        debutISO: morceaux[0],
+        finISO: morceaux[1],
+        debutAffichage: formaterDateISO(morceaux[0]),
+        finAffichage: formaterDateISO(morceaux[1])
+    };
+}
+
 function afficherNoteFrais() {
     chargerDonneesJournalieres();
+    remplirPeriodesNoteFrais();
     const zone = document.getElementById("noteFraisTableau");
     if (!zone) return;
-    const periode = calculerPeriode();
-    document.getElementById("noteFraisPeriode").textContent =
-        "Période du " + periode.debutAffichage + " au " + formaterDateISO(dateVersISO(new Date(
-            Number(periode.finISO.slice(0,4)), Number(periode.finISO.slice(5,7))-1, Number(periode.finISO.slice(8,10))-1
-        )));
+    const periode = obtenirPeriodeNoteFraisSelectionnee();
     const dates = datesDePeriode(periode.debutISO, periode.finISO);
     let totalKm = 0;
     let totalRestauration = 0;
