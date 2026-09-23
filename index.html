@@ -5129,22 +5129,26 @@ function nomMoisCra(mois) {
     ][Number(mois) - 1] || String(mois);
 }
 
-function moisCraAvecCodesProjet(debut, fin) {
-    const moisTrouves = new Map();
-    datesDePeriode(debut, fin).forEach(function(dateISO) {
-        const ligne = donneesJournalieres[dateISO] || {};
-        const codeProjet = String(ligne.code_projet || "").trim();
-        if (!codeProjet) return;
-        const morceaux = dateISO.split("-").map(Number);
-        const cle = morceaux[0] + "-" + String(morceaux[1]).padStart(2, "0");
-        if (!moisTrouves.has(cle)) {
-            moisTrouves.set(cle, { annee: morceaux[0], mois: morceaux[1] });
-        }
-    });
-    return Array.from(moisTrouves.values());
+function obtenirMoisCraPourPeriode(debut, fin) {
+    // Le CRA à fournir est celui du mois de fin de période.
+    // Exemple : 20/08/2026 → 19/09/2026 => CRA Septembre 2026.
+    const morceaux = String(fin || "").split("-").map(Number);
+    if (morceaux.length !== 3 || morceaux.some(Number.isNaN)) {
+        const periode = calculerPeriode(debut);
+        const p = periode.finISO.split("-").map(Number);
+        return { annee: p[0], mois: p[1] };
+    }
+
+    const dateFinExclusive = new Date(morceaux[0], morceaux[1] - 1, morceaux[2]);
+    dateFinExclusive.setDate(dateFinExclusive.getDate() - 1);
+
+    return {
+        annee: dateFinExclusive.getFullYear(),
+        mois: dateFinExclusive.getMonth() + 1
+    };
 }
 
-async function creerFichierCraMois(annee, mois, debut, fin) {
+async function creerFichierCraMois(annee, mois) {
     if (!window.JSZip) throw new Error("La bibliothèque Excel n'a pas pu être chargée.");
 
     const archive = await JSZip.loadAsync(base64VersUint8(MODELE_CRA_XLSM_BASE64));
@@ -5157,12 +5161,10 @@ async function creerFichierCraMois(annee, mois, debut, fin) {
     const parseur = new DOMParser();
     const documentXml = parseur.parseFromString(texteFeuille, "application/xml");
 
-    // Le CRA fourni place le mois en U6, l'année en AB6,
-    // les heures travaillées en ligne 11 et les codes projet en ligne 22.
+    // Le CRA est mensuel : le mois/année affichés sont ceux du mois de fin de période.
     definirCelluleXml(documentXml, "U6", mois, false);
     definirCelluleXml(documentXml, "AB6", annee, false);
 
-    // On ne touche qu'aux deux lignes pilotées par l'application.
     // B à AF correspondent aux jours 1 à 31.
     for (let jour = 1; jour <= 31; jour++) {
         const colonne = colonneExcelDepuisNumero(jour + 1);
@@ -5171,13 +5173,17 @@ async function creerFichierCraMois(annee, mois, debut, fin) {
     }
 
     const moisTexte = String(mois).padStart(2, "0");
+
+    // IMPORTANT : le CRA doit être alimenté avec tout le mois civil.
+    // Les jours 1 à 19 proviennent de la période sélectionnée (ex. 20/08 → 19/09)
+    // et les jours 20 à fin de mois proviennent de la période suivante
+    // (ex. 20/09 → 19/10). Comme les données sont indexées par date,
+    // on lit directement chaque journée sans dépendre de la période affichée.
     for (let jour = 1; jour <= 31; jour++) {
         const dateTest = new Date(annee, mois - 1, jour);
         if (dateTest.getFullYear() !== annee || dateTest.getMonth() !== mois - 1) continue;
 
         const dateISO = annee + "-" + moisTexte + "-" + String(jour).padStart(2, "0");
-        if (dateISO < debut || dateISO >= fin) continue;
-
         const ligne = donneesJournalieres[dateISO] || {};
         const codeProjet = String(ligne.code_projet || "").trim();
         if (!codeProjet) continue;
@@ -5213,19 +5219,13 @@ async function creerFichierCraMois(annee, mois, debut, fin) {
 }
 
 async function creerFichiersCra(debut, fin) {
-    const fichiers = [];
-    const mois = moisCraAvecCodesProjet(debut, fin);
-    for (const periodeMois of mois) {
-        fichiers.push(
-            await creerFichierCraMois(
-                periodeMois.annee,
-                periodeMois.mois,
-                debut,
-                fin
-            )
-        );
-    }
-    return fichiers;
+    const periodeCra = obtenirMoisCraPourPeriode(debut, fin);
+    return [
+        await creerFichierCraMois(
+            periodeCra.annee,
+            periodeCra.mois
+        )
+    ];
 }
 
 /* ========================================= */
@@ -5301,7 +5301,7 @@ async function extrairePeriode() {
     document.getElementById(
         "statutExport"
     ).textContent =
-        "Téléchargement des justificatifs et création des PDF…";
+        "Téléchargement des justificatifs et création des fichiers…";
 
     document.getElementById(
         "zonePdf"
